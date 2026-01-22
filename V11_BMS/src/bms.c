@@ -10,6 +10,7 @@
 #include "bms_adc.h"
 #include "ntc.h"
 #include "crc32.h"
+#include "sw_timer.h"
 
 //We start off idle.
 enum BMS_STATE bms_state = BMS_IDLE;
@@ -20,11 +21,12 @@ enum BMS_ERROR_CODE bms_error = BMS_ERR_NONE;
 struct adc_module adc_instance;
 
 #ifdef SERIAL_DEBUG
-char *bms_state_names[] = {
+const char *bms_state_names[] = 
+{
 	"BMS_IDLE",
 	"BMS_CHARGER_CONNECTED",
 	"BMS_CHARGING",
-	"BMS_CHARGER_CONNECTED_NOT_CHARGING"
+	"BMS_CHARGER_CONNECTED_NOT_CHARGING",
 	"BMS_CHARGER_UNPLUGGED",
 	"BMS_TRIGGER_PULLED",
 	"BMS_DISCHARGING",
@@ -93,7 +95,7 @@ void bms_interrupt_callback(void) {
 	}	
 }
 	
-void interrupts_init() {
+void interrupts_init(void) {
 	//A single interrupt, focused on the BQ7693's alert line (PA28), which
 	//is on EXTINT 8.
 	struct extint_chan_conf config_extint_chan;
@@ -142,8 +144,8 @@ void bms_init()
 {
 	//sets up clocks/IRQ handlers etc.
 	system_init();
-	//Initialise the delay system
-	delay_init();
+	//Initialise the sw_timer
+	sw_timer_init();
 	//Set up the pins
 	pins_init();
 	
@@ -184,8 +186,9 @@ bool bms_is_safe_to_discharge() {
 			sprintf(debug_msg_buffer, "%s: Cell voltages too low\r\n", __FUNCTION__);
 			serial_debug_send_message(debug_msg_buffer);
 				
-			for (int i=0; i<7; ++i) {
-				sprintf(debug_msg_buffer, "Cell %d: %d mV, min %d mV\r\n", i, cell_voltages[i], CELL_LOWEST_DISCHARGE_VOLTAGE);
+			for (int cell=0; cell<7; ++cell) 
+      {
+				sprintf(debug_msg_buffer, "Cell %d: %d mV, min %d mV\r\n", cell, cell_voltages[cell], CELL_LOWEST_DISCHARGE_VOLTAGE);
 				serial_debug_send_message(debug_msg_buffer);
 			}
 #endif		
@@ -330,7 +333,7 @@ void bms_handle_idle() {
 			bms_state = BMS_TRIGGER_PULLED;
 			return;
 		}
-		delay_ms(50);
+		sw_timer_delay_ms(50);
 	}	
 	//Reached the end of our wait loop, with nobody pulling the trigger, or plugging in charger.
 	//Transit to sleep state
@@ -359,7 +362,7 @@ void bms_handle_sleep()
 	while(1);
 }
 
-void bms_handle_discharging() {		
+void bms_handle_discharging(void) {		
 	
 #ifdef SERIAL_DEBUG
 	serial_debug_send_message("Starting discharge\r\n");
@@ -376,7 +379,7 @@ void bms_handle_discharging() {
 	while (1) {
 		
 #ifdef SERIAL_DEBUG
-		sprintf(debug_msg_buffer,"Discharging at %d mA, %d mAH, capacity %d mAH, Temp %d'C\r\n", currentmA*-1, eeprom_data.current_charge_level/1000, eeprom_data.total_pack_capacity/1000,
+		sprintf(debug_msg_buffer,"Discharging at %ld mA, %ld mAH, capacity %ld mAH, Temp %d'C\r\n", currentmA*-1, eeprom_data.current_charge_level/1000, eeprom_data.total_pack_capacity/1000,
 		bms_read_temperature()/10);
 		serial_debug_send_message(debug_msg_buffer);
 #endif
@@ -397,7 +400,7 @@ void bms_handle_discharging() {
 	
 		//Send the USART traffic we need to supply to keep the cleaner running
 		serial_send_next_message();
-		delay_ms(60);
+		sw_timer_delay_ms(60);
 	}
 }
 
@@ -422,7 +425,7 @@ void bms_handle_fault() {
 			for (int i=0; i<bms_error; ++i) {
 				leds_blink_error_led(500);
 			}
-			delay_ms(2000);
+			sw_timer_delay_ms(2000);
 		}
 	} 
 	while (port_pin_get_input_level(TRIGGER_PRESSED_PIN) || port_pin_get_input_level(CHARGER_CONNECTED_PIN));
@@ -453,7 +456,7 @@ void bms_handle_charger_connected_not_charging() {
 			bms_state = BMS_IDLE;
 			return;
 		}		
-		delay_ms(1000);
+		sw_timer_delay_ms(1000);
 	}
 	//Sleep then!
 	bms_state = BMS_SLEEP;
@@ -477,7 +480,7 @@ void bms_handle_charging() {
 		// TODO: leds_flash_charging_segment((eeprom_data.current_charge_level*100) / eeprom_data.total_pack_capacity);
 	
 #ifdef SERIAL_DEBUG
-		sprintf(debug_msg_buffer,"Charging at %d mA, %d mAH, capacity %d mAH, Temp %d'C\r\n", currentmA, eeprom_data.current_charge_level/1000, eeprom_data.total_pack_capacity/1000, 
+		sprintf(debug_msg_buffer,"Charging at %ld mA, %ld mAH, capacity %ld mAH, Temp %d'C\r\n", currentmA, eeprom_data.current_charge_level/1000, eeprom_data.total_pack_capacity/1000, 
 		bms_read_temperature()/10);
 		serial_debug_send_message(debug_msg_buffer);	
 #endif
@@ -549,7 +552,7 @@ void bms_handle_charging() {
 #ifdef SERIAL_DEBUG
 			serial_debug_send_message("Charging stopped - cells at capacity\r\n");
 			char message[40];
-			sprintf(message, "Total pack capacity %dmAh\r\n", eeprom_data.total_pack_capacity/1000);
+			sprintf(message, "Total pack capacity %ldmAh\r\n", eeprom_data.total_pack_capacity/1000);
 			serial_debug_send_message(message);
 #endif
 			return;	

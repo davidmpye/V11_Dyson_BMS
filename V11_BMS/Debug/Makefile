@@ -39,8 +39,6 @@ SUBDIRS :=  \
 ../src/ASF/common2/boards/ \
 ../src/ASF/common2/boards/user_board/ \
 ../src/ASF/common2/services/ \
-../src/ASF/common2/services/delay/ \
-../src/ASF/common2/services/delay/sam0/ \
 ../src/ASF/common/ \
 ../src/ASF/common/boards/ \
 ../src/ASF/common/services/ \
@@ -112,6 +110,7 @@ SUBDIRS :=  \
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS +=  \
 ../src/ASF/sam0/drivers/sercom/sercom_interrupt.c \
+../src/sw_timer.c \
 ../src/ASF/sam0/drivers/sercom/usart/usart_interrupt.c \
 ../src/bms_adc.c \
 ../src/crc32.c \
@@ -125,7 +124,6 @@ C_SRCS +=  \
 ../src/bms.c \
 ../src/eeprom_handler.c \
 ../src/serial.c \
-../src/ASF/common2/services/delay/sam0/systick_counter.c \
 ../src/ASF/sam0/drivers/adc/adc_sam_d_r_h/adc.c \
 ../src/ASF/sam0/drivers/sercom/i2c/i2c_samd20/i2c_master.c \
 ../src/ASF/sam0/drivers/sercom/usart/usart.c \
@@ -154,6 +152,7 @@ ASM_SRCS +=
 
 OBJS +=  \
 src/ASF/sam0/drivers/sercom/sercom_interrupt.o \
+src/sw_timer.o \
 src/ASF/sam0/drivers/sercom/usart/usart_interrupt.o \
 src/bms_adc.o \
 src/crc32.o \
@@ -167,7 +166,6 @@ src/ASF/sam0/services/eeprom/emulator/main_array/eeprom.o \
 src/bms.o \
 src/eeprom_handler.o \
 src/serial.o \
-src/ASF/common2/services/delay/sam0/systick_counter.o \
 src/ASF/sam0/drivers/adc/adc_sam_d_r_h/adc.o \
 src/ASF/sam0/drivers/sercom/i2c/i2c_samd20/i2c_master.o \
 src/ASF/sam0/drivers/sercom/usart/usart.o \
@@ -189,6 +187,7 @@ src/main.o
 
 OBJS_AS_ARGS +=  \
 src/ASF/sam0/drivers/sercom/sercom_interrupt.o \
+src/sw_timer.o \
 src/ASF/sam0/drivers/sercom/usart/usart_interrupt.o \
 src/bms_adc.o \
 src/crc32.o \
@@ -202,7 +201,6 @@ src/ASF/sam0/services/eeprom/emulator/main_array/eeprom.o \
 src/bms.o \
 src/eeprom_handler.o \
 src/serial.o \
-src/ASF/common2/services/delay/sam0/systick_counter.o \
 src/ASF/sam0/drivers/adc/adc_sam_d_r_h/adc.o \
 src/ASF/sam0/drivers/sercom/i2c/i2c_samd20/i2c_master.o \
 src/ASF/sam0/drivers/sercom/usart/usart.o \
@@ -224,6 +222,7 @@ src/main.o
 
 C_DEPS +=  \
 src/ASF/sam0/drivers/sercom/sercom_interrupt.d \
+src/sw_timer.d \
 src/ASF/sam0/drivers/sercom/usart/usart_interrupt.d \
 src/bms_adc.d \
 src/crc32.d \
@@ -237,7 +236,6 @@ src/ASF/sam0/services/eeprom/emulator/main_array/eeprom.d \
 src/bms.d \
 src/eeprom_handler.d \
 src/serial.d \
-src/ASF/common2/services/delay/sam0/systick_counter.d \
 src/ASF/sam0/drivers/adc/adc_sam_d_r_h/adc.d \
 src/ASF/sam0/drivers/sercom/i2c/i2c_samd20/i2c_master.d \
 src/ASF/sam0/drivers/sercom/usart/usart.d \
@@ -259,6 +257,7 @@ src/main.d
 
 C_DEPS_AS_ARGS +=  \
 src/ASF/sam0/drivers/sercom/sercom_interrupt.d \
+src/sw_timer.d \
 src/ASF/sam0/drivers/sercom/usart/usart_interrupt.d \
 src/bms_adc.d \
 src/crc32.d \
@@ -272,7 +271,6 @@ src/ASF/sam0/services/eeprom/emulator/main_array/eeprom.d \
 src/bms.d \
 src/eeprom_handler.d \
 src/serial.d \
-src/ASF/common2/services/delay/sam0/systick_counter.d \
 src/ASF/sam0/drivers/adc/adc_sam_d_r_h/adc.d \
 src/ASF/sam0/drivers/sercom/i2c/i2c_samd20/i2c_master.d \
 src/ASF/sam0/drivers/sercom/usart/usart.d \
@@ -308,6 +306,13 @@ LINKER_SCRIPT_DEP+=  \
 
 # AVR32/GNU C Compiler
 src/ASF/sam0/drivers/sercom/sercom_interrupt.o: ../src/ASF/sam0/drivers/sercom/sercom_interrupt.c
+	@echo Building file: $<
+	@echo Invoking: ARM/GNU C Compiler : 6.3.1
+	$(QUOTE)C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\arm\arm-gnu-toolchain\bin\arm-none-eabi-gcc.exe$(QUOTE)  -x c -mthumb -D__SAMD20E15__ -DDEBUG -DBOARD=USER_BOARD -DARM_MATH_CM0PLUS=true -DI2C_MASTER_CALLBACK_MODE=false -DSYSTICK_MODE -DADC_CALLBACK_MODE=false -DEXTINT_CALLBACK_MODE=true -DUSART_CALLBACK_MODE=true -DTC_ASYNC=true  -I"../src/ASF/common/boards" -I"../src/ASF/sam0/utils" -I"../src/ASF/sam0/utils/header_files" -I"../src/ASF/sam0/utils/preprocessor" -I"../src/ASF/thirdparty/CMSIS/Include" -I"../src/ASF/thirdparty/CMSIS/Lib/GCC" -I"../src/ASF/common/utils" -I"../src/ASF/sam0/utils/cmsis/samd20/include" -I"../src/ASF/sam0/utils/cmsis/samd20/source" -I"../src/ASF/sam0/drivers/system" -I"../src/ASF/sam0/drivers/system/clock/clock_samd20" -I"../src/ASF/sam0/drivers/system/clock" -I"../src/ASF/sam0/drivers/system/interrupt" -I"../src/ASF/sam0/drivers/system/interrupt/system_interrupt_samd20" -I"../src/ASF/sam0/drivers/system/pinmux" -I"../src/ASF/sam0/drivers/system/power" -I"../src/ASF/sam0/drivers/system/power/power_sam_d_r_h" -I"../src/ASF/sam0/drivers/system/reset" -I"../src/ASF/sam0/drivers/system/reset/reset_sam_d_r_h" -I"../src/ASF/common2/boards/user_board" -I"../src" -I"../src/config" -I"../src/ASF/sam0/drivers/port" -I"../src/ASF/common/services/ioport" -I"../src/ASF/sam0/drivers/sercom" -I"../src/ASF/sam0/drivers/sercom/i2c" -I"../src/ASF/sam0/drivers/sercom/i2c/i2c_samd20" -I"../src/ASF/common2/services/delay" -I"../src/ASF/common2/services/delay/sam0" -I"../src/ASF/sam0/drivers/adc" -I"../src/ASF/sam0/drivers/adc/adc_sam_d_r_h" -I"../src/ASF/sam0/drivers/sercom/usart" -I"../src/ASF/sam0/drivers/extint" -I"../src/ASF/sam0/drivers/extint/extint_sam_d_r_h" -I"../src/ASF/sam0/drivers/nvm" -I"../src/ASF/sam0/services/eeprom/emulator/main_array" -I"../src/ASF/sam0/drivers/tc" -I"../src/ASF/sam0/drivers/tc/tc_sam_d_r_h"  -O1 -fdata-sections -ffunction-sections -mlong-calls -g3 -Wall -mcpu=cortex-m0plus -c -pipe -fno-strict-aliasing -Wall -Wstrict-prototypes -Wmissing-prototypes -Werror-implicit-function-declaration -Wpointer-arith -std=gnu99 -ffunction-sections -fdata-sections -Wchar-subscripts -Wcomment -Wformat=2 -Wimplicit-int -Wmain -Wparentheses -Wsequence-point -Wreturn-type -Wswitch -Wtrigraphs -Wunused -Wuninitialized -Wunknown-pragmas -Wfloat-equal -Wundef -Wshadow -Wbad-function-cast -Wwrite-strings -Wsign-compare -Waggregate-return  -Wmissing-declarations -Wformat -Wmissing-format-attribute -Wno-deprecated-declarations -Wpacked -Wredundant-decls -Wnested-externs -Wlong-long -Wunreachable-code -Wcast-align --param max-inline-insns-single=500 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"   -o "$@" "$<" 
+	@echo Finished building: $<
+	
+
+src/sw_timer.o: ../src/sw_timer.c
 	@echo Building file: $<
 	@echo Invoking: ARM/GNU C Compiler : 6.3.1
 	$(QUOTE)C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\arm\arm-gnu-toolchain\bin\arm-none-eabi-gcc.exe$(QUOTE)  -x c -mthumb -D__SAMD20E15__ -DDEBUG -DBOARD=USER_BOARD -DARM_MATH_CM0PLUS=true -DI2C_MASTER_CALLBACK_MODE=false -DSYSTICK_MODE -DADC_CALLBACK_MODE=false -DEXTINT_CALLBACK_MODE=true -DUSART_CALLBACK_MODE=true -DTC_ASYNC=true  -I"../src/ASF/common/boards" -I"../src/ASF/sam0/utils" -I"../src/ASF/sam0/utils/header_files" -I"../src/ASF/sam0/utils/preprocessor" -I"../src/ASF/thirdparty/CMSIS/Include" -I"../src/ASF/thirdparty/CMSIS/Lib/GCC" -I"../src/ASF/common/utils" -I"../src/ASF/sam0/utils/cmsis/samd20/include" -I"../src/ASF/sam0/utils/cmsis/samd20/source" -I"../src/ASF/sam0/drivers/system" -I"../src/ASF/sam0/drivers/system/clock/clock_samd20" -I"../src/ASF/sam0/drivers/system/clock" -I"../src/ASF/sam0/drivers/system/interrupt" -I"../src/ASF/sam0/drivers/system/interrupt/system_interrupt_samd20" -I"../src/ASF/sam0/drivers/system/pinmux" -I"../src/ASF/sam0/drivers/system/power" -I"../src/ASF/sam0/drivers/system/power/power_sam_d_r_h" -I"../src/ASF/sam0/drivers/system/reset" -I"../src/ASF/sam0/drivers/system/reset/reset_sam_d_r_h" -I"../src/ASF/common2/boards/user_board" -I"../src" -I"../src/config" -I"../src/ASF/sam0/drivers/port" -I"../src/ASF/common/services/ioport" -I"../src/ASF/sam0/drivers/sercom" -I"../src/ASF/sam0/drivers/sercom/i2c" -I"../src/ASF/sam0/drivers/sercom/i2c/i2c_samd20" -I"../src/ASF/common2/services/delay" -I"../src/ASF/common2/services/delay/sam0" -I"../src/ASF/sam0/drivers/adc" -I"../src/ASF/sam0/drivers/adc/adc_sam_d_r_h" -I"../src/ASF/sam0/drivers/sercom/usart" -I"../src/ASF/sam0/drivers/extint" -I"../src/ASF/sam0/drivers/extint/extint_sam_d_r_h" -I"../src/ASF/sam0/drivers/nvm" -I"../src/ASF/sam0/services/eeprom/emulator/main_array" -I"../src/ASF/sam0/drivers/tc" -I"../src/ASF/sam0/drivers/tc/tc_sam_d_r_h"  -O1 -fdata-sections -ffunction-sections -mlong-calls -g3 -Wall -mcpu=cortex-m0plus -c -pipe -fno-strict-aliasing -Wall -Wstrict-prototypes -Wmissing-prototypes -Werror-implicit-function-declaration -Wpointer-arith -std=gnu99 -ffunction-sections -fdata-sections -Wchar-subscripts -Wcomment -Wformat=2 -Wimplicit-int -Wmain -Wparentheses -Wsequence-point -Wreturn-type -Wswitch -Wtrigraphs -Wunused -Wuninitialized -Wunknown-pragmas -Wfloat-equal -Wundef -Wshadow -Wbad-function-cast -Wwrite-strings -Wsign-compare -Waggregate-return  -Wmissing-declarations -Wformat -Wmissing-format-attribute -Wno-deprecated-declarations -Wpacked -Wredundant-decls -Wnested-externs -Wlong-long -Wunreachable-code -Wcast-align --param max-inline-insns-single=500 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"   -o "$@" "$<" 
@@ -399,13 +404,6 @@ src/eeprom_handler.o: ../src/eeprom_handler.c
 	
 
 src/serial.o: ../src/serial.c
-	@echo Building file: $<
-	@echo Invoking: ARM/GNU C Compiler : 6.3.1
-	$(QUOTE)C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\arm\arm-gnu-toolchain\bin\arm-none-eabi-gcc.exe$(QUOTE)  -x c -mthumb -D__SAMD20E15__ -DDEBUG -DBOARD=USER_BOARD -DARM_MATH_CM0PLUS=true -DI2C_MASTER_CALLBACK_MODE=false -DSYSTICK_MODE -DADC_CALLBACK_MODE=false -DEXTINT_CALLBACK_MODE=true -DUSART_CALLBACK_MODE=true -DTC_ASYNC=true  -I"../src/ASF/common/boards" -I"../src/ASF/sam0/utils" -I"../src/ASF/sam0/utils/header_files" -I"../src/ASF/sam0/utils/preprocessor" -I"../src/ASF/thirdparty/CMSIS/Include" -I"../src/ASF/thirdparty/CMSIS/Lib/GCC" -I"../src/ASF/common/utils" -I"../src/ASF/sam0/utils/cmsis/samd20/include" -I"../src/ASF/sam0/utils/cmsis/samd20/source" -I"../src/ASF/sam0/drivers/system" -I"../src/ASF/sam0/drivers/system/clock/clock_samd20" -I"../src/ASF/sam0/drivers/system/clock" -I"../src/ASF/sam0/drivers/system/interrupt" -I"../src/ASF/sam0/drivers/system/interrupt/system_interrupt_samd20" -I"../src/ASF/sam0/drivers/system/pinmux" -I"../src/ASF/sam0/drivers/system/power" -I"../src/ASF/sam0/drivers/system/power/power_sam_d_r_h" -I"../src/ASF/sam0/drivers/system/reset" -I"../src/ASF/sam0/drivers/system/reset/reset_sam_d_r_h" -I"../src/ASF/common2/boards/user_board" -I"../src" -I"../src/config" -I"../src/ASF/sam0/drivers/port" -I"../src/ASF/common/services/ioport" -I"../src/ASF/sam0/drivers/sercom" -I"../src/ASF/sam0/drivers/sercom/i2c" -I"../src/ASF/sam0/drivers/sercom/i2c/i2c_samd20" -I"../src/ASF/common2/services/delay" -I"../src/ASF/common2/services/delay/sam0" -I"../src/ASF/sam0/drivers/adc" -I"../src/ASF/sam0/drivers/adc/adc_sam_d_r_h" -I"../src/ASF/sam0/drivers/sercom/usart" -I"../src/ASF/sam0/drivers/extint" -I"../src/ASF/sam0/drivers/extint/extint_sam_d_r_h" -I"../src/ASF/sam0/drivers/nvm" -I"../src/ASF/sam0/services/eeprom/emulator/main_array" -I"../src/ASF/sam0/drivers/tc" -I"../src/ASF/sam0/drivers/tc/tc_sam_d_r_h"  -O1 -fdata-sections -ffunction-sections -mlong-calls -g3 -Wall -mcpu=cortex-m0plus -c -pipe -fno-strict-aliasing -Wall -Wstrict-prototypes -Wmissing-prototypes -Werror-implicit-function-declaration -Wpointer-arith -std=gnu99 -ffunction-sections -fdata-sections -Wchar-subscripts -Wcomment -Wformat=2 -Wimplicit-int -Wmain -Wparentheses -Wsequence-point -Wreturn-type -Wswitch -Wtrigraphs -Wunused -Wuninitialized -Wunknown-pragmas -Wfloat-equal -Wundef -Wshadow -Wbad-function-cast -Wwrite-strings -Wsign-compare -Waggregate-return  -Wmissing-declarations -Wformat -Wmissing-format-attribute -Wno-deprecated-declarations -Wpacked -Wredundant-decls -Wnested-externs -Wlong-long -Wunreachable-code -Wcast-align --param max-inline-insns-single=500 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"   -o "$@" "$<" 
-	@echo Finished building: $<
-	
-
-src/ASF/common2/services/delay/sam0/systick_counter.o: ../src/ASF/common2/services/delay/sam0/systick_counter.c
 	@echo Building file: $<
 	@echo Invoking: ARM/GNU C Compiler : 6.3.1
 	$(QUOTE)C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\arm\arm-gnu-toolchain\bin\arm-none-eabi-gcc.exe$(QUOTE)  -x c -mthumb -D__SAMD20E15__ -DDEBUG -DBOARD=USER_BOARD -DARM_MATH_CM0PLUS=true -DI2C_MASTER_CALLBACK_MODE=false -DSYSTICK_MODE -DADC_CALLBACK_MODE=false -DEXTINT_CALLBACK_MODE=true -DUSART_CALLBACK_MODE=true -DTC_ASYNC=true  -I"../src/ASF/common/boards" -I"../src/ASF/sam0/utils" -I"../src/ASF/sam0/utils/header_files" -I"../src/ASF/sam0/utils/preprocessor" -I"../src/ASF/thirdparty/CMSIS/Include" -I"../src/ASF/thirdparty/CMSIS/Lib/GCC" -I"../src/ASF/common/utils" -I"../src/ASF/sam0/utils/cmsis/samd20/include" -I"../src/ASF/sam0/utils/cmsis/samd20/source" -I"../src/ASF/sam0/drivers/system" -I"../src/ASF/sam0/drivers/system/clock/clock_samd20" -I"../src/ASF/sam0/drivers/system/clock" -I"../src/ASF/sam0/drivers/system/interrupt" -I"../src/ASF/sam0/drivers/system/interrupt/system_interrupt_samd20" -I"../src/ASF/sam0/drivers/system/pinmux" -I"../src/ASF/sam0/drivers/system/power" -I"../src/ASF/sam0/drivers/system/power/power_sam_d_r_h" -I"../src/ASF/sam0/drivers/system/reset" -I"../src/ASF/sam0/drivers/system/reset/reset_sam_d_r_h" -I"../src/ASF/common2/boards/user_board" -I"../src" -I"../src/config" -I"../src/ASF/sam0/drivers/port" -I"../src/ASF/common/services/ioport" -I"../src/ASF/sam0/drivers/sercom" -I"../src/ASF/sam0/drivers/sercom/i2c" -I"../src/ASF/sam0/drivers/sercom/i2c/i2c_samd20" -I"../src/ASF/common2/services/delay" -I"../src/ASF/common2/services/delay/sam0" -I"../src/ASF/sam0/drivers/adc" -I"../src/ASF/sam0/drivers/adc/adc_sam_d_r_h" -I"../src/ASF/sam0/drivers/sercom/usart" -I"../src/ASF/sam0/drivers/extint" -I"../src/ASF/sam0/drivers/extint/extint_sam_d_r_h" -I"../src/ASF/sam0/drivers/nvm" -I"../src/ASF/sam0/services/eeprom/emulator/main_array" -I"../src/ASF/sam0/drivers/tc" -I"../src/ASF/sam0/drivers/tc/tc_sam_d_r_h"  -O1 -fdata-sections -ffunction-sections -mlong-calls -g3 -Wall -mcpu=cortex-m0plus -c -pipe -fno-strict-aliasing -Wall -Wstrict-prototypes -Wmissing-prototypes -Werror-implicit-function-declaration -Wpointer-arith -std=gnu99 -ffunction-sections -fdata-sections -Wchar-subscripts -Wcomment -Wformat=2 -Wimplicit-int -Wmain -Wparentheses -Wsequence-point -Wreturn-type -Wswitch -Wtrigraphs -Wunused -Wuninitialized -Wunknown-pragmas -Wfloat-equal -Wundef -Wshadow -Wbad-function-cast -Wwrite-strings -Wsign-compare -Waggregate-return  -Wmissing-declarations -Wformat -Wmissing-format-attribute -Wno-deprecated-declarations -Wpacked -Wredundant-decls -Wnested-externs -Wlong-long -Wunreachable-code -Wcast-align --param max-inline-insns-single=500 -MD -MP -MF "$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)"   -o "$@" "$<" 

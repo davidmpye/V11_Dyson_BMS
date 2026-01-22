@@ -8,7 +8,7 @@
 
 #include "eeprom_handler.h"
 
-int eeprom_init() {
+int eeprom_init(void) {
 	enum status_code error_code = eeprom_emulator_init();
 	if (error_code == STATUS_ERR_NO_MEMORY) {
 		//We are here because the fuses are set to 0x07, meaning eeprom is not enabled.
@@ -34,14 +34,14 @@ int eeprom_init() {
 	return error_code;
 }
 
-int eeprom_read() {
+int eeprom_read(void) {
 	volatile uint8_t buffer[EEPROM_PAGE_SIZE];
 	eeprom_emulator_read_page(0, buffer);
 	memcpy(&eeprom_data, buffer, sizeof(eeprom_data));
 	return 0;
 }
 
-int eeprom_write() {
+int eeprom_write(void) {
 	uint8_t buffer[EEPROM_PAGE_SIZE];
 	memcpy(buffer, &eeprom_data, sizeof(eeprom_data));
 	eeprom_emulator_write_page(0, buffer);	
@@ -49,7 +49,7 @@ int eeprom_write() {
 	return 0;
 }
 
-int eeprom_fuses_set() {
+int eeprom_fuses_set(void) {
 	//Set the the NVM
 	struct nvm_config config_nvm;
 	nvm_get_config_defaults(&config_nvm);

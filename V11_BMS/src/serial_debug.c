@@ -7,6 +7,8 @@
  */ 
 
 #include "serial_debug.h"
+#include "sw_timer.h"
+
 #ifdef SERIAL_DEBUG
 struct usart_module debug_usart;
 #include <string.h>
@@ -53,20 +55,22 @@ void serial_debug_init() {
 	serial_debug_send_message("(C) David Pye davidmpye@gmail.com\r\n");
 	serial_debug_send_message("GNU GPL v3.0 or later\r\n");
 	//Need to pause 250mS before cell voltages are available from the BQ7693
-	delay_ms(250);
+	sw_timer_delay_ms(250);
 	serial_debug_send_cell_voltages();
 #endif
 
 }
 
-void serial_debug_send_message(char *msg) {
-	
+void serial_debug_send_message(const char *msg) 
+{
 #ifdef SERIAL_DEBUG
-	int result = usart_write_buffer_wait(&debug_usart, msg, strlen(msg));
-#else
-	return 0;
-#endif
+  size_t msg_len = strlen(msg);
 
+  if(msg_len > 0)
+	{
+    usart_write_buffer_wait(&debug_usart, (const uint8_t*)msg, (uint16_t)msg_len);
+  }
+#endif
 }
 
 void serial_debug_send_cell_voltages() {

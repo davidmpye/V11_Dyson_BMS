@@ -28,10 +28,8 @@ volatile struct eeprom_data {
 } eeprom_data;
 
 int eeprom_init(void);
-
-int eeprom_read();
-int eeprom_write();
-
+int eeprom_read(void);
+int eeprom_write(void);
 int eeprom_fuses_set(void);
 
 #endif /* EEPROM_H_ */

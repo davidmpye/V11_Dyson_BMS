@@ -62,9 +62,6 @@
 // From module: Common build items for user board support templates
 #include <user_board.h>
 
-// From module: Delay routines
-#include <delay.h>
-
 // From module: EEPROM Emulator Service
 #include <eeprom.h>
 

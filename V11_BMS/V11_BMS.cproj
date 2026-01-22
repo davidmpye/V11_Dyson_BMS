@@ -609,8 +609,6 @@
     <Folder Include="src\ASF\common2\boards\" />
     <Folder Include="src\ASF\common2\boards\user_board\" />
     <Folder Include="src\ASF\common2\services\" />
-    <Folder Include="src\ASF\common2\services\delay\" />
-    <Folder Include="src\ASF\common2\services\delay\sam0\" />
     <Folder Include="src\ASF\common\" />
     <Folder Include="src\ASF\common\boards\" />
     <Folder Include="src\ASF\common\services\" />
@@ -680,6 +678,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\ASF\sam0\drivers\sercom\sercom_interrupt.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\sw_timer.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\sw_timer.h">
       <SubType>compile</SubType>
     </Compile>
     <None Include="src\ASF\sam0\drivers\sercom\sercom_interrupt.h">
@@ -776,15 +780,6 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\serial.h">
-      <SubType>compile</SubType>
-    </Compile>
-    <None Include="src\ASF\common2\services\delay\sam0\systick_counter.h">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\ASF\common2\services\delay\delay.h">
-      <SubType>compile</SubType>
-    </None>
-    <Compile Include="src\ASF\common2\services\delay\sam0\systick_counter.c">
       <SubType>compile</SubType>
     </Compile>
     <None Include="src\ASF\sam0\drivers\adc\adc.h">
