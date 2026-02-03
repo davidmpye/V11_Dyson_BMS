@@ -23,9 +23,12 @@
 #define BQ7693_ALERT_PIN PIN_PA28
 
  //NB Goes high when trigger pulled, but don't have it pulled up or down..
-#define TRIGGER_PRESSED_PIN PIN_PA04
+#define TRIGGER_PRESSED_PIN                 PIN_PA04
 //Goes high when charger plugged in.
-#define CHARGER_CONNECTED_PIN PIN_PA06
+#define CHARGER_CONNECTED_PIN               PIN_PA06
+#define MODE_BUTTON                         PIN_PA09
+#define MODE_BUTTON_PULLUP_VOLTAGE_ENABLE   PIN_PA18
+#define PRECHARGE_PIN                       PIN_PA24
 
 //PA07 is attached to thermistor RT1
 
@@ -46,7 +49,7 @@
 // Limits disabled, as V15 & V11 have 2xRTDs, now unknown where are assigned, therefore even max temp doesnt work
 // Do not charge battery when hot and not supervised! This is for Debug only for V15, battery pack outputs 24V
 
-#define IDLE_TIME 60 * 1 // Idle time in seconds. Pack will go into SHIP/deep sleep mode if nothing happens in this duration
+#define IDLE_TIME 60 * 5 // Idle time in seconds. Pack will go into SHIP/deep sleep mode if nothing happens in this duration
 
 #define FULL_CHARGE_PAUSE_COUNT 10 //Once a cell reaches max charge volts, pause for 30 seconds and retry, this many times.
 

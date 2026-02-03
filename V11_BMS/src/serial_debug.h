@@ -38,6 +38,7 @@ extern char *debug_msg_buffer;
 extern void serial_debug_init(void);
 extern void serial_debug_send_message(const char *msg);
 extern void serial_debug_send_cell_voltages(void);
+extern void serial_debug_send_pack_capacity(void);
 
 /*-----------------------------------------------------------------------------
   END OF MODULE DEFINITION FOR MULTIPLE INCLUSION

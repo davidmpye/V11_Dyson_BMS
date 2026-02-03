@@ -17,6 +17,12 @@
 /*-----------------------------------------------------------------------------
   DEFINITION OF GLOBAL TYPES
 -----------------------------------------------------------------------------*/
+typedef enum
+{
+  LEDS_LED_ERR_LEFT,
+  LEDS_LED_ERR_RIGHT,
+  LEDS_NUM
+}leds_t;
 
 /*-----------------------------------------------------------------------------
   DEFINITION OF GLOBAL MACROS/#DEFINES
@@ -35,10 +41,11 @@
 -----------------------------------------------------------------------------*/
 extern void leds_init(void);
 extern void leds_sequence(void) ;
-extern void leds_blink_error_led(int);
+extern void leds_blink_leds(int);
 extern void leds_show_pack_flat(void);
 extern void leds_off(void);
 extern void leds_on(void);
+extern void leds_set_led_duty(leds_t led, uint8_t duty_ppt);
 
 /*-----------------------------------------------------------------------------
   END OF MODULE DEFINITION FOR MULTIPLE INCLUSION

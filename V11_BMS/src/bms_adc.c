@@ -40,8 +40,9 @@ static struct adc_module adc_instance;
 -----------------------------------------------------------------------------*/
 static const enum adc_positive_input adc_ch_map_cfg[BMS_ADC_CH_NUM] = 
 {
-  [BMS_ADC_CH_TC1] = ADC_POSITIVE_INPUT_PIN7,  /* PA07 */
-  [BMS_ADC_CH_TC2] = ADC_POSITIVE_INPUT_PIN16  /* PA08 */
+  [BMS_ADC_CH_TC1]      = ADC_POSITIVE_INPUT_PIN7,  /* PA07 */
+  [BMS_ADC_CH_TC2]      = ADC_POSITIVE_INPUT_PIN16, /* PA08 */
+  [BMS_ADC_MODE_BUTTON] = ADC_POSITIVE_INPUT_PIN17  /* PA09 */
 };
 
 /*-----------------------------------------------------------------------------
@@ -76,6 +77,41 @@ void bms_adc_init(void)
   ADC->INTFLAG.reg  = ADC_INTFLAG_MASK;
 
   adc_enable(&adc_instance);
+}
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+uint16_t adc_convert_channel(bms_adc_ch_t ch)
+{
+  enum status_code status;
+  uint16_t result = 0xFFFF;
+
+  if(ch < BMS_ADC_CH_NUM)
+  {
+    enum adc_positive_input ch_mux = adc_ch_map_cfg[ch];
+
+    /* Select ADC channel */
+    adc_set_positive_input(&adc_instance, ch_mux);
+
+    /* Start one-shot conversion */
+    adc_start_conversion(&adc_instance);
+
+    /* Poll until conversion is complete */
+    do
+    {
+      status = adc_read(&adc_instance, &result);
+    } while (status == STATUS_BUSY);
+
+    if(status != STATUS_OK)
+    {
+      result = 0xFFFF;
+    }
+
+    adc_result[ch] = result;
+  }
+
+  return result;
 }
 
 //- **************************************************************************
@@ -116,7 +152,7 @@ void adc_convert_channels(void)
 //- **************************************************************************
 //! \brief 
 //- **************************************************************************
-uint16_t bms_adc_read_ch(bms_adc_ch_type ch)
+uint16_t bms_adc_read_ch(bms_adc_ch_t ch)
 {
   uint16_t adc_ch_value = 0xFFFF;
 

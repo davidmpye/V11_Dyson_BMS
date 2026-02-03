@@ -222,7 +222,7 @@ void bq7693_disable_charge(void)
 void bq7693_enable_discharge(void) 
 {
   bq7693_write_register(SYS_CTRL2, 0x40);  //CC_EN=1
-  bq7693_write_register(SYS_CTRL1, 0x18);  //ADC_EN=1, TEMP_SEL=1
+  bq7693_write_register(SYS_CTRL1, 0x10);  //ADC_EN=1
   
   bq7693_write_register(PROTECT1, 0x9F); 
   bq7693_write_register(PROTECT2, 0x04);

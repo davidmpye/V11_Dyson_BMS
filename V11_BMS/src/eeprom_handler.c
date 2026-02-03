@@ -19,7 +19,7 @@ int eeprom_init(void)
     //the mcu.
     for (int i=0; i<4; ++i)
      {
-      leds_blink_error_led(2000);
+      leds_blink_leds(2000);
     }
     //This will update the fuses then reset the MCU
     eeprom_fuses_set();
@@ -30,8 +30,8 @@ int eeprom_init(void)
     eeprom_emulator_erase_memory();
     error_code = eeprom_emulator_init();
     //Write an initial guestimate of what a pack capacity might look like, we'll fine tune this by charging and discharging.
-    eeprom_data.total_pack_capacity = 2000000;  //in microAmpHours - equiv of 2000mAh.
-    eeprom_data.current_charge_level = 1000000; //half charged.
+    eeprom_data.total_pack_capacity  = (3200uL * 1000ul);  //in microAmpHours 
+    eeprom_data.current_charge_level = ((3200uL / 2ul) * 1000ul); //half charged.
     eeprom_write();
     eeprom_emulator_commit_page_buffer();
   }

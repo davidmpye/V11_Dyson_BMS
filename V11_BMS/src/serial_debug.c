@@ -14,8 +14,7 @@
 #ifdef SERIAL_DEBUG
 #include <string.h>
 #endif
-
-
+#include "eeprom_handler.h"
 
 /*-----------------------------------------------------------------------------
     DECLARATION OF LOCAL FUNCTIONS
@@ -93,8 +92,9 @@ void serial_debug_init()
   //Initial debug blurb
   serial_debug_send_message("Dyson V11/V15 BMS After market firmware\r\n");
   //Need to pause at least 250mS before cell voltages are available from the BQ7693
-  sw_timer_delay_ms(250);
+  delay_ms(500);
   serial_debug_send_cell_voltages();
+  serial_debug_send_pack_capacity();
 #endif
 }
 
@@ -116,7 +116,7 @@ void serial_debug_send_message(const char *msg)
 //- **************************************************************************
 //! \brief
 //- **************************************************************************
-void serial_debug_send_cell_voltages()
+void serial_debug_send_cell_voltages(void)
 {
 #ifdef SERIAL_DEBUG
   uint16_t *cell_voltages = bq7693_get_cell_voltages();
@@ -130,6 +130,17 @@ void serial_debug_send_cell_voltages()
   }
 #endif
 }
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+void serial_debug_send_pack_capacity(void)
+{
+#ifdef SERIAL_DEBUG
+  sprintf(debug_msg_buffer, "Pack capacity %ldmAh\r\n", eeprom_data.current_charge_level/1000);
+  serial_debug_send_message(debug_msg_buffer);
+#endif
+}
+
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL FUNCTIONS

@@ -20,8 +20,9 @@ typedef enum
 {
   BMS_ADC_CH_TC1,
   BMS_ADC_CH_TC2,
+  BMS_ADC_MODE_BUTTON,
   BMS_ADC_CH_NUM
-}bms_adc_ch_type;
+}bms_adc_ch_t;
 
 /*-----------------------------------------------------------------------------
   DEFINITION OF GLOBAL MACROS/#DEFINES
@@ -39,8 +40,9 @@ typedef enum
   DECLARATION OF GLOBAL FUNCTIONS
 -----------------------------------------------------------------------------*/
 extern void bms_adc_init(void);
+extern uint16_t adc_convert_channel(bms_adc_ch_t ch);
 extern void adc_convert_channels(void);
-extern uint16_t bms_adc_read_ch(bms_adc_ch_type ch);
+extern uint16_t bms_adc_read_ch(bms_adc_ch_t ch);
 
 /*-----------------------------------------------------------------------------
   END OF MODULE DEFINITION FOR MULTIPLE INCLUSION

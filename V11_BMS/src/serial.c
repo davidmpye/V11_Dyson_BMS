@@ -40,10 +40,6 @@
 //Data is read into here via a callback triggered by usart_read_buffer_job
 static uint8_t rx_char = 0;
 struct usart_module usart_instance;
-uint8_t rx_char_buff_idx = 0;
-uint8_t rx_char_buff_bytes = 0;
-uint8_t rx_char_buff[64] = {0};
-static sw_timer com_timeout = 0;
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL CONSTANTS
@@ -54,7 +50,6 @@ static sw_timer com_timeout = 0;
 -----------------------------------------------------------------------------*/
 static void serial_usart_tx_to_gpio_input(void);
 static void serial_usart_tx_restore(void);
-static void pin_set_peripheral_function(uint32_t pinmux);
 static void usart_read_callback(struct usart_module *const usart_module);
 
 /*-----------------------------------------------------------------------------
@@ -146,17 +141,6 @@ static void serial_usart_tx_restore(void)
   pin_conf.direction    = SYSTEM_PINMUX_PIN_DIR_OUTPUT;
   pin_conf.mux_position = PINMUX_PA14C_SERCOM2_PAD2;
   system_pinmux_pin_set_config(PIN_PA14, &pin_conf);
-}
-
-//- **************************************************************************
-//! \brief
-//- **************************************************************************
-static void pin_set_peripheral_function(uint32_t pinmux)
-{
-  uint8_t port = (uint8_t)((pinmux >> 16)/32);
-  PORT->Group[port].PINCFG[((pinmux >> 16) - (port*32))].bit.PMUXEN = 1;
-  PORT->Group[port].PMUX[((pinmux >> 16) - (port*32))/2].reg &= ~(0xF << (4 * ((pinmux >> 16) & 0x01u)));
-  PORT->Group[port].PMUX[((pinmux >> 16) - (port*32))/2].reg |= (uint8_t)((pinmux & 0x0000FFFF) << (4 * ((pinmux >> 16) & 0x01u)));
 }
 
 /*-----------------------------------------------------------------------------

@@ -40,21 +40,17 @@
     DEFINITION OF LOCAL VARIABLES
 -----------------------------------------------------------------------------*/
 //We start off idle.
-static enum BMS_STATE bms_state      = BMS_IDLE;
-static enum BMS_STATE bms_state_prev = BMS_IDLE - 1;
+static enum BMS_STATE bms_state      = BMS_INIT;
 //If a fault occurs, it'll be lodged here.
 static enum BMS_ERROR_CODE bms_error = BMS_ERR_NONE;
 
-static bool discarge_state = false;
 static int32_t current_mA = 0;
 static int32_t current_filt_sum_mA = 0;
 static int32_t current_filt_mA = 0;
 
+static uint16_t charge_pause_counter = 0;
+static uint8_t  charging_leds_duty = 0;
 static sw_timer bms_timer = 0;
-static sw_timer bms_sleep_timer = 0;
-#ifdef SERIAL_DEBUG
-static sw_timer bms_debug_print_timer = 0;
-#endif
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL CONSTANTS
@@ -62,15 +58,17 @@ static sw_timer bms_debug_print_timer = 0;
 #ifdef SERIAL_DEBUG
 const char *bms_state_names[] =
 {
-  "BMS_IDLE",
-  "BMS_CHARGER_CONNECTED",
-  "BMS_CHARGING",
-  "BMS_CHARGER_CONNECTED_NOT_CHARGING",
-  "BMS_CHARGER_UNPLUGGED",
-  "BMS_TRIGGER_PULLED",
-  "BMS_DISCHARGING",
-  "BMS_FAULT",
-  "BMS_SLEEP"
+  "INIT",
+  "IDLE",
+  "CHARGER_CONNECTED",
+  "CHARGING",
+  "CHARGING_PAUSED",
+  "CHARGER_CONNECTED_NOT_CHARGING",
+  "CHARGER_UNPLUGGED",
+  "TRIGGER_PULLED",
+  "DISCHARGING",
+  "FAULT",
+  "SLEEP"
 };
 #endif
 
@@ -78,6 +76,7 @@ const char *bms_state_names[] =
     DEFINITION OF LOCAL FUNCTIONS PROTOTYPES
 -----------------------------------------------------------------------------*/
 static void    pins_init(void);
+static void    pins_deinit(void);
 static void    interrupts_init(void);
 static int16_t bms_read_temperature(void);
 static bool    bms_is_safe_to_discharge(void);
@@ -114,10 +113,6 @@ void bms_init(void)
   //BQ7693 init
   bq7693_init();
   
-  #ifdef SERIAL_DEBUG
-  serial_debug_init();
-  #endif
-  
   //Init the LEDs
   leds_init();
   //Init eeprom emulator
@@ -127,11 +122,13 @@ void bms_init(void)
   //Initialise the USART we need to talk to the vacuum cleaner
   serial_init();
   
-  prot_init();
-  
   //Enable interrupts
   interrupts_init();
-  prot_init();
+
+  bq7693_disable_discharge();
+#ifdef SERIAL_DEBUG
+  serial_debug_init();
+#endif
 }
 
 //- **************************************************************************
@@ -147,9 +144,8 @@ void bms_interrupt_callback(void)
     int32_t ccVal = bq7693_read_cc();
     
     //This needs better handling....
-    current_mA = ccVal * (uint16_t)(8.44f * 4096.0f);
-    current_mA >>= 12;
-    #define FILT_MS   (1000ul)
+    current_mA = (ccVal * (uint16_t)(8.44f * 4096.0f)) / 4096;
+    #define FILT_MS   (500ul)
     #define PERIOD_MS (250ul)
     current_filt_sum_mA += ( (int32_t)((65536.0 * PERIOD_MS) / FILT_MS) * (int16_t)(current_mA - (int16_t)(current_filt_sum_mA >> 16) ) );
     current_filt_mA = current_filt_sum_mA >> 16;
@@ -166,7 +162,7 @@ void bms_interrupt_callback(void)
       //Dividing by 14.4 will give microAH (what we want)
       // 14.4 = ((3600 * 1000) / 250ms) / 1000mAh
       cc_mah = ccVal * (int16_t)(((8.44f * 250.0f * 32768.0f) / (3600.0f)));
-      eeprom_data.current_charge_level += (cc_mah >> 16);
+      eeprom_data.current_charge_level += (cc_mah /32768);
       
       //We thought the pack was full, but it's still charging, so we need to update its' size.
       if (eeprom_data.current_charge_level > eeprom_data.total_pack_capacity)
@@ -190,9 +186,9 @@ void bms_interrupt_callback(void)
 //- **************************************************************************
 //! \brief
 //- **************************************************************************
-int32_t bms_get_soc_x10(void)
+int32_t bms_get_soc_x100(void)
 {
-  int32_t res = (eeprom_data.total_pack_capacity * 10) / eeprom_data.current_charge_level;
+  int32_t res = eeprom_data.current_charge_level / (eeprom_data.total_pack_capacity / 10000);
   return res;
 }
 
@@ -201,7 +197,7 @@ int32_t bms_get_soc_x10(void)
 //- **************************************************************************
 uint32_t bms_get_runtime_seconds(void)
 {
-  uint32_t res = (eeprom_data.current_charge_level * 3600) / current_filt_mA;
+  uint32_t res = ((eeprom_data.current_charge_level / 1000) * 3600) / abs(current_filt_mA);
   return res;
 }
 
@@ -214,41 +210,24 @@ void bms_mainloop(void)
   while (1)
   {
 #ifdef SERIAL_DEBUG
-    if(bms_state_prev != bms_state)
-    {
-      sprintf(debug_msg_buffer, "State %s\r\n", bms_state_names[bms_state]);
-      serial_debug_send_message(debug_msg_buffer);
-    }
+    sprintf(debug_msg_buffer, "BMS: %s\r\n", bms_state_names[bms_state]);
+    serial_debug_send_message(debug_msg_buffer);
 #endif
-    
-    // manage mosfett switch, always closed when vacuum is connected
-    if(prot_is_vacuum_connected())
-    {
-      if(bms_state != BMS_FAULT)
-      {
-        //Check if it's safe to discharge or not.
-        if (discarge_state == false && true == bms_is_safe_to_discharge())
-        {
-          bq7693_enable_discharge();
-          discarge_state = true;
-        }
-      }
-      else
-      {
-        discarge_state = false;
-      }
-    }
-    else
-    {
-      if (discarge_state != false)
-      {
-        bq7693_disable_discharge();
-        discarge_state = false;
-      }
-    }
-
+  
     switch (bms_state)
     {
+    //-----------------------------------------------------------------------
+      case BMS_INIT:
+        // check pack state
+        if (bms_is_safe_to_charge() && bms_is_safe_to_discharge())
+          bms_state = BMS_IDLE;
+        else
+          bms_state = BMS_FAULT;
+
+        port_pin_set_output_level(PRECHARGE_PIN, true);
+        prot_init();
+
+      break;
       //-----------------------------------------------------------------------
       case BMS_IDLE:
         bms_handle_idle();
@@ -267,25 +246,11 @@ void bms_mainloop(void)
       break;
       //-----------------------------------------------------------------------
       case BMS_CHARGING:
-      {
-        if(bms_state_prev != bms_state)
-        {
-          bms_state_prev = bms_state;
-        }
-
         bms_handle_charging();
-      }
       break;
       //-----------------------------------------------------------------------
       case BMS_CHARGER_CONNECTED_NOT_CHARGING:
-      {
-        if(bms_state_prev != bms_state)
-        {
-          bms_state_prev = bms_state;
-        }
-
         bms_handle_charger_connected_not_charging();
-      }
       break;
       //-----------------------------------------------------------------------
       case BMS_CHARGER_UNPLUGGED:
@@ -301,9 +266,6 @@ void bms_mainloop(void)
       break;
       //-----------------------------------------------------------------------
       default:
-      {
-        bms_state_prev = bms_state;
-      }
       break;
     }
 
@@ -334,8 +296,8 @@ static void pins_init(void)
   sense_pin_config.input_pull = PORT_PIN_PULL_NONE;
   port_pin_set_config(CHARGER_CONNECTED_PIN, &sense_pin_config);
   port_pin_set_config(TRIGGER_PRESSED_PIN, &sense_pin_config);
-  port_pin_set_config(PIN_PA09, &sense_pin_config);
 
+  
   struct port_config io_pin_config;
   port_get_config_defaults(&io_pin_config);
   io_pin_config.direction = PORT_PIN_DIR_OUTPUT;
@@ -344,19 +306,31 @@ static void pins_init(void)
   port_pin_set_config(PIN_PA03, &io_pin_config);
   port_pin_set_output_level(PIN_PA03, true);
 
-  port_pin_set_config(PIN_PA05, &io_pin_config);
-  port_pin_set_output_level(PIN_PA05, true);
+  // mode pin pullup voltage 
+  port_pin_set_config(MODE_BUTTON_PULLUP_VOLTAGE_ENABLE, &io_pin_config);
+  port_pin_set_output_level(MODE_BUTTON_PULLUP_VOLTAGE_ENABLE, true);
 
-  // mode pin pullup voltage enable
-  port_pin_set_config(PIN_PA18, &io_pin_config);
-  port_pin_set_output_level(PIN_PA18, true);
+  // precharge 
+  port_pin_set_config(PRECHARGE_PIN, &io_pin_config);
+  port_pin_set_output_level(PRECHARGE_PIN, false);
 
-  // precharge enable
-  port_pin_set_config(PIN_PA24, &io_pin_config);
-  port_pin_set_output_level(PIN_PA24, true);
-
+  // unknown functionality pin
   port_pin_set_config(PIN_PA25, &io_pin_config);
   port_pin_set_output_level(PIN_PA25, true);
+
+  // mode button
+  port_pin_set_config(MODE_BUTTON, &sense_pin_config);
+}
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static void pins_deinit(void)
+{
+  port_pin_set_output_level(PIN_PA03, false);
+  port_pin_set_output_level(MODE_BUTTON_PULLUP_VOLTAGE_ENABLE, false);
+  port_pin_set_output_level(PRECHARGE_PIN, false);
+  port_pin_set_output_level(PIN_PA25, false);
 }
 
 //- **************************************************************************
@@ -391,13 +365,11 @@ static int16_t bms_read_temperature(void)
   int16_t tc2_temp;
   uint16_t adc_value;
 
-  adc_convert_channels();
-
   // get tc1
-  adc_value = bms_adc_read_ch(BMS_ADC_CH_TC1);
+  adc_value = adc_convert_channel(BMS_ADC_CH_TC1);
   tc1_temp = NTC_ADC2Temperature(adc_value);
   // get tc2
-  adc_value = bms_adc_read_ch(BMS_ADC_CH_TC2);
+  adc_value = adc_convert_channel(BMS_ADC_CH_TC2);
   tc2_temp = NTC_ADC2Temperature(adc_value);
 
   // return temperature point between two thermistors if they have plausible values - no more than 5 degree difference
@@ -542,6 +514,7 @@ static bool bms_is_safe_to_charge(void)
   //Check sys_stat
   uint8_t sys_stat;
   bq7693_read_register(SYS_STAT, 1, &sys_stat);
+
   if (sys_stat & 0x01)
   {
     bms_error = BMS_ERR_OVERCURRENT;
@@ -554,9 +527,9 @@ static bool bms_is_safe_to_charge(void)
   }
   
   if (bms_error == BMS_ERR_NONE)
-  return true;
+    return true;
   else
-  return false;
+    return false;
 }
 
 //- **************************************************************************
@@ -566,16 +539,16 @@ static bool bms_is_pack_full(void)
 {
   uint16_t *cell_voltages = bq7693_get_cell_voltages();
 
-  #ifdef SERIAL_DEBUG
+#ifdef SERIAL_DEBUG
   for (int i=0; i<7; ++i)
   {
-    char message[40];
-    sprintf(message, "Cell %d: %d mV, target %d mV\r\n", i, cell_voltages[i], CELL_FULL_CHARGE_VOLTAGE);
+    //char message[40];
+    //sprintf(message, "Cell %d: %d mV, target %d mV\r\n", i, cell_voltages[i], CELL_FULL_CHARGE_VOLTAGE);
   }
-  #endif
+#endif
 
   //If any cells are at their full charge voltage, we are full.
-  for (int i=0; i<7;++i)
+  for (int i=0; i<7; ++i)
   {
     if (cell_voltages[i] >= CELL_FULL_CHARGE_VOLTAGE )
     {
@@ -591,37 +564,27 @@ static bool bms_is_pack_full(void)
 //- **************************************************************************
 static void bms_handle_idle(void)
 {
-  if(bms_state_prev != bms_state)
-  {
-    bms_state_prev = bms_state;
-    sw_timer_start(&bms_timer);
-    sw_timer_start(&bms_sleep_timer);
-  }
+  sw_timer_start(&bms_timer);
 
-  //Three potential ways out of this state - someone pulls the trigger, plugs in a charger, or the IDLE_TIME is exceeded and we go to sleep.
-  if(false != sw_timer_is_elapsed(&bms_timer, 50))
+  do 
   {
     if (port_pin_get_input_level(CHARGER_CONNECTED_PIN) == true)
     {
-      sw_timer_stop(&bms_timer);
-      // force trigger state
-      prot_set_trigger(false);
       bms_state = BMS_CHARGER_CONNECTED;
+      return;
     }
     else if (port_pin_get_input_level(TRIGGER_PRESSED_PIN) == true)
     {
-      sw_timer_stop(&bms_timer);
       bms_state = BMS_TRIGGER_PULLED;
+      return;
     }
+    sw_timer_delay_ms(50);
 
-   if(false != sw_timer_is_elapsed(&bms_sleep_timer, (IDLE_TIME * 1000)))
-    {
-      //Reached the end of our wait loop, with nobody pulling the trigger, or plugging in charger.
-      //Transit to sleep state
-      bms_state = BMS_SLEEP;
-      sw_timer_stop(&bms_sleep_timer);
-    }
-  }
+  } while (false == sw_timer_is_elapsed(&bms_timer, ((IDLE_TIME * 1000ul))));
+  	
+  //Reached the end of our wait loop, with nobody pulling the trigger, or plugging in charger.
+  //Transit to sleep state
+  bms_state = BMS_SLEEP;
 }
 
 //- **************************************************************************
@@ -629,31 +592,16 @@ static void bms_handle_idle(void)
 //- **************************************************************************
 static void bms_handle_trigger_pulled(void)
 {
-  if(bms_state_prev != bms_state)
+	//Check if it's safe to discharge or not.
+	if (bms_is_safe_to_discharge()) 
   {
-    bms_state_prev = bms_state;
-  }
-
-  if(prot_is_vacuum_connected())
+		//All go - unleash the power!
+		bms_state = BMS_DISCHARGING;
+	}
+	else 
   {
-    //Check if it's safe to discharge or not.
-    if (bms_is_safe_to_discharge())
-    {
-      bms_state = BMS_DISCHARGING;
-      // notify protocol that trigger is pulled 
-      prot_set_trigger(true);
-    }
-    else
-    {
-      bms_state = BMS_FAULT;
-    }
-  }
-  else
-  {
-    // no vacuum connected, return to idle
-    bms_state = BMS_IDLE;
-    leds_blink_error_led(500);
-  }
+		bms_state = BMS_FAULT;
+	}
 }
 
 //- **************************************************************************
@@ -661,10 +609,9 @@ static void bms_handle_trigger_pulled(void)
 //- **************************************************************************
 static void bms_handle_sleep(void)
 {
-  if(bms_state_prev != bms_state)
-  {
-    bms_state_prev = bms_state;
-  }
+  pins_deinit();
+
+  delay_ms(1000);
 
   //Store pack charge data to eeprom
   eeprom_write();
@@ -680,49 +627,36 @@ static void bms_handle_sleep(void)
 //- **************************************************************************
 static void bms_handle_discharging(void)
 {
-  if(bms_state_prev != bms_state)
+	if (bms_is_safe_to_discharge()) 
   {
-    sw_timer_start(&bms_timer);
-    sw_timer_start(&bms_debug_print_timer);
-#ifdef SERIAL_DEBUG
-    serial_debug_send_message("Discharge...\r\n");
-#endif
-    bms_state_prev = bms_state;
-  }
+		//Sanity check, hopefully already checked prior to here!
+		bq7693_enable_discharge();
+    sw_timer_delay_ms(300);
+    prot_set_trigger(true);
+	}
 
-#ifdef SERIAL_DEBUG
-  if(false != sw_timer_is_elapsed(&bms_debug_print_timer, 250))
+  while (1)
   {
-    sw_timer_start(&bms_debug_print_timer);
-    sprintf(debug_msg_buffer,"I:%ld mA @ %ld mAH,C:%ld mAH,T:%d'C\r\n", current_filt_mA * -1, eeprom_data.current_charge_level / 1000, eeprom_data.total_pack_capacity / 1000,
-    bms_read_temperature()/10);
-    serial_debug_send_message(debug_msg_buffer);
-  }
-#endif
-
-  if(false != sw_timer_is_elapsed(&bms_timer, 50))
-  {
-    sw_timer_start(&bms_timer);
-
-    if (!port_pin_get_input_level(TRIGGER_PRESSED_PIN))
+    if (!port_pin_get_input_level(TRIGGER_PRESSED_PIN)) 
     {
+      prot_set_trigger(false);
+      sw_timer_delay_ms(300);
       //Trigger released.
+      bq7693_disable_discharge();
+      //Clear the battery status etc.
       leds_off();
       bms_state = BMS_IDLE;
-      // notify protocol that trigger is released
-      prot_set_trigger(false);
       return;
     }
-      
-    if(!bms_is_safe_to_discharge())
+    if (!bms_is_safe_to_discharge()) 
     {
       //A fault has occurred.
       bq7693_disable_discharge();
       bms_state = BMS_FAULT;
-      // notify protocol that something is wrong
-      prot_set_trigger(false);
       return;
     }
+
+    sw_timer_delay_ms(60);
   }
 }
 
@@ -731,49 +665,42 @@ static void bms_handle_discharging(void)
 //- **************************************************************************
 static void bms_handle_fault(void)
 {
-  if(bms_state_prev != bms_state)
+  //Turn all the LEDs off.
+	leds_off();
+	prot_set_trigger(false);
+  bq7693_disable_discharge();
+  port_pin_set_output_level(ENABLE_CHARGE_PIN, false);
+
+	//Show the error status and continue to show it, until trigger released and charger unplugged.
+	do 
   {
-    //Turn all the LEDs off.
-    leds_off();
-    // notify protocol that something is wrong
-    prot_set_trigger(false);
-    bq7693_disable_discharge();
-    port_pin_set_output_level(ENABLE_CHARGE_PIN, false);
-    bq7693_disable_charge();
-
-    bms_state_prev = bms_state;
-  }
-
-  //Show the error status and continue to show it, until trigger released and charger unplugged.
-  do
-  {
-    if (bms_error == BMS_ERR_PACK_DISCHARGED || bms_error == BMS_ERR_UNDERVOLTAGE )
+		if (bms_error == BMS_ERR_PACK_DISCHARGED || bms_error == BMS_ERR_UNDERVOLTAGE ) 
     {
-      //If the problem is just a flat pack, blink the lowest battery segment three times.
-      leds_show_pack_flat();
+			//If the problem is just a flat pack, blink the lowest battery segment three times.
+			leds_show_pack_flat();
 
-      //We also need to update the pack capacity as it's flat at this point.
-      if (eeprom_data.current_charge_level > 0)
+			//We also need to update the pack capacity as it's flat at this point.
+			if (eeprom_data.current_charge_level > 0) 
       {
-        eeprom_data.total_pack_capacity -= eeprom_data.current_charge_level;
-        eeprom_data.current_charge_level = 0;
-      }
-    }
-    else
+				eeprom_data.total_pack_capacity -= eeprom_data.current_charge_level;
+				eeprom_data.current_charge_level = 0;				
+			}
+		}
+		else 
     {
-      //Flash the red error led the number of times indicated by the fault code.
-      for (int i=0; i<bms_error; ++i)
+			//Flash the red error led the number of times indicated by the fault code.
+			for (int i=0; i<bms_error; ++i)
       {
-        leds_blink_error_led(500);
-      }
+				leds_blink_leds(500);
+			}
 
-      sw_timer_delay_ms(2000);
-    }
-  }
-  while (port_pin_get_input_level(TRIGGER_PRESSED_PIN) || port_pin_get_input_level(CHARGER_CONNECTED_PIN));
-  
-  //Return to idle
-  bms_state = BMS_IDLE;
+			sw_timer_delay_ms(2000);
+		}
+	} 
+	while (port_pin_get_input_level(TRIGGER_PRESSED_PIN) || port_pin_get_input_level(CHARGER_CONNECTED_PIN));
+		
+	//Return to idle
+	bms_state = BMS_IDLE;	
 }
 
 //- **************************************************************************
@@ -781,11 +708,6 @@ static void bms_handle_fault(void)
 //- **************************************************************************
 static void bms_handle_charger_connected(void)
 {
-  if(bms_state_prev != bms_state)
-  {
-    bms_state_prev = bms_state;
-  }
-
   if (bms_is_pack_full())
   {
     //If the pack is full, transit to idle.
@@ -832,30 +754,33 @@ static void bms_handle_charger_connected_not_charging(void)
 static void bms_handle_charging(void)
 {
   //Sanity check...
-  if (!bms_is_safe_to_charge())
+  if (!bms_is_safe_to_charge()) 
   {
     bms_state = BMS_FAULT;
     return;
   }
-
+  
   //Enable charging.
   port_pin_set_output_level(ENABLE_CHARGE_PIN, true);
   //Enable the charge FET in the BQ7693.
   bq7693_enable_charge();
   
-  int charge_pause_counter = 0;
+  charge_pause_counter = 0;
   
-  while (1)
+  while (1) 
   {
-    //Charging now in progress.
-    //Show flashing LED segment to indicate we are charging.
-    // TODO: leds_flash_charging_segment((eeprom_data.current_charge_level*100) / eeprom_data.total_pack_capacity);
-    
-#ifdef SERIAL_DEBUG
-    sprintf(debug_msg_buffer,"I:%ld mA @ %ld mAH,C:%ld mAH,T:%d'C\r\n", current_filt_mA, eeprom_data.current_charge_level / 1000, eeprom_data.total_pack_capacity / 1000, bms_read_temperature()/10);
-    serial_debug_send_message(debug_msg_buffer);
-#endif
-    if (!bms_is_safe_to_charge())
+    uint8_t duty_loc = charging_leds_duty;
+
+    if(charging_leds_duty > 60)
+    {
+      duty_loc = (120 - charging_leds_duty);
+    }
+
+    leds_set_led_duty(LEDS_LED_ERR_RIGHT, duty_loc);
+    leds_set_led_duty(LEDS_LED_ERR_LEFT,  duty_loc);
+    charging_leds_duty = (charging_leds_duty + 2) % 120;
+
+    if (!bms_is_safe_to_charge()) 
     {
       //Safety error.
       port_pin_set_output_level(ENABLE_CHARGE_PIN, false);
@@ -878,23 +803,22 @@ static void bms_handle_charging(void)
       return;
     }
     
-    if (bms_is_pack_full())
+    if (bms_is_pack_full()) 
     {
-      #ifdef SERIAL_DEBUG
+#ifdef SERIAL_DEBUG
       sprintf(debug_msg_buffer, "Charging paused - cell full, attempt %d of %d\r\n", charge_pause_counter, FULL_CHARGE_PAUSE_COUNT);
       serial_debug_send_message(debug_msg_buffer);
       serial_debug_send_cell_voltages();
-      #endif
+#endif
       //Pause the charging.
       port_pin_set_output_level(ENABLE_CHARGE_PIN, false);
       bq7693_disable_charge();
       
       //Delay for 30 seconds, then go and try again.
-      for (int i=0; i<30; ++i)
+      for (int i=0; i<30; ++i) 
       {
-        //Check the charger hasn't been unplugged while we're waiting
         //If it has, abandon the charge process and return to main loop
-        if (!port_pin_get_input_level(CHARGER_CONNECTED_PIN))
+        if (!port_pin_get_input_level(CHARGER_CONNECTED_PIN)) 
         {
           //Charger's been unplugged.
           leds_off();
@@ -908,7 +832,7 @@ static void bms_handle_charging(void)
       bq7693_enable_charge();
     }
     
-    if (charge_pause_counter == FULL_CHARGE_PAUSE_COUNT)
+    if (charge_pause_counter >= FULL_CHARGE_PAUSE_COUNT) 
     {
       //After FULL_CHARGE_PAUSE_COUNT pauses, we are full.
       //Disable the charging
@@ -922,14 +846,14 @@ static void bms_handle_charging(void)
       //Set charge level to equal capacity.
       eeprom_data.total_pack_capacity = eeprom_data.current_charge_level;
 
-      #ifdef SERIAL_DEBUG
+#ifdef SERIAL_DEBUG
       serial_debug_send_message("Charging stopped - cells at capacity\r\n");
-      char message[40];
-      sprintf(message, "Total pack capacity %ldmAh\r\n", eeprom_data.total_pack_capacity/1000);
-      serial_debug_send_message(message);
-      #endif
+      serial_debug_send_pack_capacity();
+#endif
       return;
     }
+
+    sw_timer_delay_ms(60);
   }
 }
 
@@ -961,7 +885,7 @@ static void bms_handle_charger_unplugged(void)
   //Flash the error led for 100ms for each 50mV the pack is out of balance
   for (int i=0; i<round(spread/50); ++i)
   {
-    leds_blink_error_led(100);
+    leds_blink_leds(100);
   }
 
 #ifdef SERIAL_DEBUG

@@ -10,6 +10,8 @@
   INCLUDE FILES
 ---------------------------------------------------------------------------- */
 #include "asf.h"
+#include "protocol.h"
+#include "bms_adc.h"
 
 /*-----------------------------------------------------------------------------
   DEFINITION OF GLOBAL TYPES
@@ -20,6 +22,11 @@ typedef uint32_t sw_timer;
   DEFINITION OF GLOBAL MACROS/#DEFINES
 -----------------------------------------------------------------------------*/
 #define SW_TIMER_TICK_MS      1
+#define SW_TIMER_SERVICES()   \
+{ \
+  prot_mainloop(); \
+}
+
 /*-----------------------------------------------------------------------------
   DECLARATION OF GLOBAL VARIABLES
 -----------------------------------------------------------------------------*/
