@@ -51,7 +51,7 @@
 #define TX_WAIT_TIME                        (2 / SW_TIMER_TICK_MS)
 
 #define BYTE_0x12_REPLACEMENT               (0xDEDB)  // 0x12 is replaced with 0xDB 0xDE to avoid framing error
-#define BYTE_0xDB_REPLACEMENT               (0xDDDB)  // 0xDB is replaced with 0xDB 0xDD
+#define BYTE_0xDB_REPLACEMENT               (0xDDDB)  // 0xDB is replaced with 0xDB 0xDD to avoid framing error
 
 #ifdef SERIAL_DEBUG
   #define PROT_PRINT(...) \
@@ -71,6 +71,7 @@ typedef enum
   PROT_INIT,
   PROT_IDLE,
   PROT_WAIT_FRAME,
+  PROT_TX_DATA_FRAME,
   PROT_TX_FRAME,
   PROT_TX_TRIGGER_RESP,
   PROT_WAIT_STATE,
@@ -82,7 +83,6 @@ typedef struct
   const uint8_t* msg_req_ptr;
   const uint8_t* msg_res_ptr;
   uint8_t        msg_req_cmp_size;
-  uint8_t        msg_req_size;
   uint8_t        msg_res_size;
   prot_states    dest_state;
 #ifdef SERIAL_DEBUG
@@ -141,10 +141,9 @@ static const prot_cfg_t prot_cfg[] =
   {
     .msg_req_ptr      = msg_vac_data_req,
     .msg_res_ptr      = serial_buffer_tx,
-    .msg_req_cmp_size = sizeof(msg_vac_data_req),
-    .msg_req_size     = sizeof(msg_vac_data_req),
+    .msg_req_cmp_size = 8,
     .msg_res_size     = sizeof(msg_bms_data_res),
-    .dest_state       = PROT_TX_FRAME,
+    .dest_state       = PROT_TX_DATA_FRAME,
 #ifdef SERIAL_DEBUG
     .dump_bytes       = false,
     .debug_str        = NULL,
@@ -154,7 +153,6 @@ static const prot_cfg_t prot_cfg[] =
 //    .msg_req_ptr      = msg_vac_trig_req,
 //    .msg_res_ptr      = NULL,
 //    .msg_req_cmp_size = sizeof(msg_vac_trig_req),
-//    .msg_req_size     = sizeof(msg_vac_trig_req),
 //    .msg_res_size     = 0,
 //    .dest_state       = PROT_TX_TRIGGER_RESP,
 //    #ifdef SERIAL_DEBUG
@@ -166,7 +164,6 @@ static const prot_cfg_t prot_cfg[] =
 //    .msg_req_ptr      = msg_vac_trig_charging_req,
 //    .msg_res_ptr      = NULL,
 //    .msg_req_cmp_size = sizeof(msg_vac_trig_charging_req),
-//    .msg_req_size     = sizeof(msg_vac_trig_charging_req),
 //    .msg_res_size     = 0,
 //    .dest_state       = PROT_TX_TRIGGER_RESP,
 //    #ifdef SERIAL_DEBUG
@@ -178,7 +175,6 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_ptr      = msg_vac_trig_req,
     .msg_res_ptr      = NULL,
     .msg_req_cmp_size = 11u,
-    .msg_req_size     = sizeof(msg_vac_trig_req),
     .msg_res_size     = 0,
     .dest_state       = PROT_TX_TRIGGER_RESP,
 #ifdef SERIAL_DEBUG
@@ -190,7 +186,6 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_ptr      = msg_vac_handshake_req,
     .msg_res_ptr      = msg_bms_handshake_res,
     .msg_req_cmp_size = sizeof(msg_vac_handshake_req),
-    .msg_req_size     = sizeof(msg_vac_handshake_req),
     .msg_res_size     = sizeof(msg_bms_handshake_res),
     .dest_state       = PROT_TX_FRAME,
 #ifdef SERIAL_DEBUG
@@ -203,8 +198,10 @@ static const prot_cfg_t prot_cfg[] =
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL FUNCTIONS PROTOTYPES
 -----------------------------------------------------------------------------*/
-static prot_states prot_analyze_data_frame(prot_states current_state);
+static prot_states prot_analyze_frame(prot_states current_state);
 static void prot_assemble_data_frame(void);
+static uint8_t prot_scramble_frame(uint8_t * dest, const uint8_t * src, size_t dest_len, size_t src_len);
+static uint8_t prot_unscramble_frame(uint8_t * dest, const uint8_t * src, size_t dest_len, size_t src_len);
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL FUNCTIONS
@@ -277,7 +274,7 @@ void prot_mainloop(void)
     //------------------------------------------------------------------------
     case PROT_WAIT_FRAME:
     {
-      prot_states prot_state_req = prot_analyze_data_frame(prot_state);
+      prot_states prot_state_req = prot_analyze_frame(prot_state);
 
       if(prot_state != prot_state_req)
       {
@@ -287,6 +284,12 @@ void prot_mainloop(void)
       }
     }
     break;
+    //------------------------------------------------------------------------
+    case PROT_TX_DATA_FRAME:
+    {
+      prot_assemble_data_frame();
+    }
+    // no break here
     //------------------------------------------------------------------------
     case PROT_TX_FRAME:
     {
@@ -348,14 +351,10 @@ void prot_serial_rx_callback(uint8_t ch)
 {
   static uint8_t ch_prev = 0;
 
-  if(ch == MSG_DELIM_CHAR && ch_prev != MSG_DELIM_CHAR)
-  { // end of frame detected, to be processed ...
-    frame_flag = true;
-  }
-  else if(ch == MSG_DELIM_CHAR && ch_prev == MSG_DELIM_CHAR)
-  { // new frame detected, reset buffer level
-    serial_buffer_level = 0;
-  }
+  // end of frame detected, to be processed ...
+  frame_flag           = ((ch == MSG_DELIM_CHAR) && (ch_prev != MSG_DELIM_CHAR));
+  // new frame detected, reset buffer level
+  serial_buffer_level *= (uint8_t)!((ch == MSG_DELIM_CHAR) && (ch_prev == MSG_DELIM_CHAR));
 
   if(serial_buffer_level < sizeof(serial_buffer_rx))
   {
@@ -377,7 +376,7 @@ void prot_serial_rx_callback(uint8_t ch)
 //- **************************************************************************
 //! \brief
 //- **************************************************************************
-static prot_states prot_analyze_data_frame(prot_states current_state)
+static prot_states prot_analyze_frame(prot_states current_state)
 {
   prot_states res = current_state;
 
@@ -385,60 +384,16 @@ static prot_states prot_analyze_data_frame(prot_states current_state)
   {
     for(uint8_t cfg_idx = 0; cfg_idx < (sizeof(prot_cfg) / sizeof(prot_cfg[0])); cfg_idx++)
     {
-      switch (serial_buffer_rx[MSG_ID_IDX])
+      if(serial_buffer_level > (MSG_DELIM_SIZE + 1) && serial_buffer_rx[serial_buffer_level - 1] == MSG_DELIM_CHAR)
       {
-        //-----------------------------------------------------
-        case 0x21: // BMS data frame request from vacuum
-        { 
-          if(prot_cfg[cfg_idx].msg_req_cmp_size == serial_buffer_level)
-          {
-            // check the beginning of 0x21 message, without rolling counter
-            if(0 == memcmp(&serial_buffer_rx[0], &prot_cfg[cfg_idx].msg_req_ptr[0], BMS_MSG_ROLLING_COUNTER_IDX))
-            {// check the rest of the data, skipping rolling counter, CRC32 and frame delimiter
-              //if(0 == memcmp(&serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX + 1], &prot_cfg[cfg_idx].msg_req_ptr[BMS_MSG_ROLLING_COUNTER_IDX + 1], (prot_cfg[cfg_idx].msg_req_size - (BMS_MSG_ROLLING_COUNTER_IDX + 1) - (CRC_SIZE + MSG_DELIM_SIZE))))
-              {
-                prot_assemble_data_frame();
-                res        = prot_cfg[cfg_idx].dest_state;
-                tx_msg_idx = cfg_idx;
-              }
-            }
-          }
-        }
-        break;
-        //-----------------------------------------------------
-        case 0x22: // handshake
-        case 0x16: // trigger request
+        if(0 == memcmp(serial_buffer_rx, prot_cfg[cfg_idx].msg_req_ptr, prot_cfg[cfg_idx].msg_req_cmp_size))
         {
-          bool check_msg = true;
-            
-          // check frame delimiter if we are not checking whole message
-          if(prot_cfg[cfg_idx].msg_req_cmp_size < prot_cfg[cfg_idx].msg_req_size)
-          {
-            if(serial_buffer_rx[serial_buffer_level - 1] != MSG_DELIM_CHAR)
-            {
-              // last byte is not delimiter
-              check_msg = false;
-            }
-          }
-            
-          if(check_msg == true)
-          {
-            if(0 == memcmp(serial_buffer_rx, prot_cfg[cfg_idx].msg_req_ptr, prot_cfg[cfg_idx].msg_req_cmp_size))
-            {
-              res        = prot_cfg[cfg_idx].dest_state;
-              tx_msg_idx = cfg_idx;
-              tx_length  = prot_cfg[tx_msg_idx].msg_res_size;
-            }
-          }
+          res        = prot_cfg[cfg_idx].dest_state;
+          tx_msg_idx = cfg_idx;
+          tx_length  = prot_cfg[tx_msg_idx].msg_res_size;
         }
-        break;
-        //-----------------------------------------------------
-        default:
-        {
-        }
-        break;
       }
-
+      
       if(res != current_state)
       {
 #ifdef SERIAL_DEBUG
@@ -457,6 +412,7 @@ static prot_states prot_analyze_data_frame(prot_states current_state)
           PROT_PRINT("\r\n");
         }
 #endif
+        // leave the loop for processing 
         break;
       }
     }
@@ -467,14 +423,13 @@ static prot_states prot_analyze_data_frame(prot_states current_state)
   return res;
 }
 
-
 //- **************************************************************************
 //! \brief
 //- **************************************************************************
 static void prot_assemble_data_frame(void)
 {
-  uint8_t serial_buffer_tx_tmp[sizeof(serial_buffer_tx)] = {0};
-  uint16_t soc_percent_x10   = bms_get_soc_x100();
+  uint8_t serial_buffer_tmp[sizeof(msg_bms_data_res)] = {0};
+  uint16_t soc_percent_x100  = bms_get_soc_x100();  // state of charge in percent * 100 
   uint16_t runtime_sec       = bms_get_runtime_seconds();
   bool     charger_connected = port_pin_get_input_level(CHARGER_CONNECTED_PIN);
   uint8_t  rolling_counter;
@@ -482,7 +437,7 @@ static void prot_assemble_data_frame(void)
 
   // first copy rolling counter from serial buffer
   uint16_t rolling_counter_u16 = (uint16_t)serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX] | ((uint16_t)serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX + 1] << 8);
-
+  
   if(BYTE_0x12_REPLACEMENT == rolling_counter_u16)
   {
     rolling_counter = 0x12;
@@ -497,67 +452,131 @@ static void prot_assemble_data_frame(void)
   }
 
   // copy data response to serial buffer
-  memcpy(serial_buffer_tx_tmp, msg_bms_data_res, sizeof(msg_bms_data_res));
+  memcpy(serial_buffer_tmp, msg_bms_data_res, sizeof(msg_bms_data_res));
   // copy back rolling counter to response
-  serial_buffer_tx_tmp[BMS_MSG_ROLLING_COUNTER_IDX] = rolling_counter;
+  serial_buffer_tmp[BMS_MSG_ROLLING_COUNTER_IDX] = rolling_counter;
   // fill charger connected state
-  serial_buffer_tx_tmp[BMS_MSG_CHARGER_CONNECTED_IDX] = charger_connected;
+  serial_buffer_tmp[BMS_MSG_CHARGER_CONNECTED_IDX] = charger_connected;
   // fill trigger state
-  serial_buffer_tx_tmp[BMS_MSG_TRIGGER_IDX] = prot_trigger_state;
+  serial_buffer_tmp[BMS_MSG_TRIGGER_IDX] = prot_trigger_state;
   // fill estimated runtime in seconds
-  serial_buffer_tx_tmp[BMS_MSG_BAT_RUNTIME_LO_IDX] = (uint8_t)((runtime_sec >> 0) & 0x00FF); // lsb first
-  serial_buffer_tx_tmp[BMS_MSG_BAT_RUNTIME_HI_IDX] = (uint8_t)((runtime_sec >> 8) & 0x00FF);
+  serial_buffer_tmp[BMS_MSG_BAT_RUNTIME_LO_IDX] = (uint8_t)((runtime_sec >> 0) & 0x00FF); // lsb first
+  serial_buffer_tmp[BMS_MSG_BAT_RUNTIME_HI_IDX] = (uint8_t)((runtime_sec >> 8) & 0x00FF);
 
   // fill state of charge
-  serial_buffer_tx_tmp[BMS_MSG_SOC_LO_IDX] = (uint8_t)((soc_percent_x10 >> 0) & 0x00FF); // lsb first
-  serial_buffer_tx_tmp[BMS_MSG_SOC_HI_IDX] = (uint8_t)((soc_percent_x10 >> 8) & 0x00FF);
-  // set mode ... to be implemented 
-  serial_buffer_tx_tmp[BMS_MSG_SOC2_LO_IDX] = (uint8_t)((soc_percent_x10 >> 0) & 0x00FF); // lsb first
-  serial_buffer_tx_tmp[BMS_MSG_SOC2_HI_IDX] = (uint8_t)((soc_percent_x10 >> 8) & 0x00FF);
+  serial_buffer_tmp[BMS_MSG_SOC_LO_IDX] = (uint8_t)((soc_percent_x100 >> 0) & 0x00FF); // lsb first
+  serial_buffer_tmp[BMS_MSG_SOC_HI_IDX] = (uint8_t)((soc_percent_x100 >> 8) & 0x00FF);
+  // unknown field, chinese bms put SOC here 
+  serial_buffer_tmp[BMS_MSG_SOC2_LO_IDX] = (uint8_t)((soc_percent_x100 >> 0) & 0x00FF); // lsb first
+  serial_buffer_tmp[BMS_MSG_SOC2_HI_IDX] = (uint8_t)((soc_percent_x100 >> 8) & 0x00FF);
   
   // calculate crc
-  crc = calc_crc32(serial_buffer_tx_tmp, (sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)));
+  crc = calc_crc32(serial_buffer_tmp, (sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)));
   // fill crc into the message
-  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 0] = (uint8_t)((crc >> 0)  & 0x000000FFul);  // lsb first
-  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 1] = (uint8_t)((crc >> 8)  & 0x000000FFul);
-  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 2] = (uint8_t)((crc >> 16) & 0x000000FFul);
-  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 3] = (uint8_t)((crc >> 24) & 0x000000FFul);
+  serial_buffer_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 0] = (uint8_t)((crc >> 0)  & 0x000000FFul);  // lsb first
+  serial_buffer_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 1] = (uint8_t)((crc >> 8)  & 0x000000FFul);
+  serial_buffer_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 2] = (uint8_t)((crc >> 16) & 0x000000FFul);
+  serial_buffer_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 3] = (uint8_t)((crc >> 24) & 0x000000FFul);
 
-  // reset tx length before use 
-  tx_length = 0;
+  tx_length = prot_scramble_frame(serial_buffer_tx, serial_buffer_tmp, sizeof(serial_buffer_tx), sizeof(msg_bms_data_res));
+}
 
-  for (uint8_t src = 0; src < sizeof(msg_bms_data_res); src++)
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static uint8_t prot_scramble_frame(uint8_t * dest, const uint8_t * src, size_t dest_len, size_t src_len)
+{
+  uint8_t length = 0;
+  
+  if(src_len > (MSG_DELIM_SIZE + 1) && dest_len >= src_len)
   {
-    if(src > 0 && src < (sizeof(msg_bms_data_res) - 1))
+    // copy delimiter - start of frame
+    dest[length++] = src[0];
+    // next 5 bytes are fixed also
+    dest[length++] = src[1];
+    dest[length++] = src[2];
+    dest[length++] = src[3];
+    dest[length++] = src[4];
+    dest[length++] = src[5];
+
+    for (size_t i = 6; i < (src_len - 1); i++)
     {
-      if(serial_buffer_tx_tmp[src] == 0x12)
+      if((length + 2) < (uint8_t)dest_len)
       {
-        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0x12_REPLACEMENT >> 0) & 0xFF);
-        tx_length++;
-        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0x12_REPLACEMENT >> 8) & 0xFF);
-        tx_length++;
+        if(src[i] == 0x12)
+        {
+          dest[length++] = (uint8_t)((BYTE_0x12_REPLACEMENT >> 0) & 0xFF);
+          dest[length++] = (uint8_t)((BYTE_0x12_REPLACEMENT >> 8) & 0xFF);
+        }
+        else if(src[i] == 0xDB)
+        {
+          dest[length++] = (uint8_t)((BYTE_0xDB_REPLACEMENT >> 0) & 0xFF);
+          dest[length++] = (uint8_t)((BYTE_0xDB_REPLACEMENT >> 8) & 0xFF);
+        }
+        else
+        {
+          dest[length++] = src[i];
+        }
       }
-      else if(serial_buffer_tx_tmp[src] == 0xDB)
+    }
+
+    // copy delimiter - end of frame
+    dest[length++] = src[(src_len - 1)];
+  }
+
+  return length;
+}
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static uint8_t prot_unscramble_frame(uint8_t * dest, const uint8_t * src, size_t dest_len, size_t src_len)
+{
+  uint8_t length = 0;
+
+  if(src_len > (MSG_DELIM_SIZE + 1) && dest_len >= (src_len - 1))
+  {
+  // copy delimiter - start of frame
+    dest[length++] = src[0];
+    // next 5 bytes are fixed also
+    dest[length++] = src[1];
+    dest[length++] = src[2];
+    dest[length++] = src[3];
+    dest[length++] = src[4];
+    dest[length++] = src[5];
+
+    for (size_t i = 6; i < (src_len - 1); i++, length++)
+    {
+      if((i + 1) < (src_len - 1))
       {
-        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0xDB_REPLACEMENT >> 0) & 0xFF);
-        tx_length++;
-        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0xDB_REPLACEMENT >> 8) & 0xFF);
-        tx_length++;
+        uint16_t word_u16 = (uint16_t)src[i] | ((uint16_t)src[i + 1] << 8);
+
+        if(BYTE_0x12_REPLACEMENT == word_u16)
+        {
+          dest[length] = 0x12;
+          i++;
+        }
+        else if(BYTE_0xDB_REPLACEMENT == word_u16)
+        {
+          dest[length] = 0xDB;
+          i++;
+        }
+        else
+        {
+          dest[length] = src[i];
+        }
       }
       else
       {
-        serial_buffer_tx[tx_length] = serial_buffer_tx_tmp[src];
-        tx_length++;
+        dest[length] = src[i];
       }
     }
-    else
-    {// copy frame delimiters without conversion
-      serial_buffer_tx[tx_length] = serial_buffer_tx_tmp[src];
-      tx_length++;
-    }
-  }
-}
 
+    // copy delimiter - end of frame
+    dest[length++] = src[(src_len - 1)];
+  }
+
+  return length;
+}
 /*-----------------------------------------------------------------------------
     END OF MODULE
 -----------------------------------------------------------------------------*/

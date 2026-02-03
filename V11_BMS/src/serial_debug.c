@@ -55,9 +55,6 @@ char *debug_msg_buffer = debug_buffer;
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL FUNCTIONS PROTOTYPES
 -----------------------------------------------------------------------------*/
-#ifdef SERIAL_DEBUG
-static void pin_set_peripheral_function(uint32_t pinmux);
-#endif
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL FUNCTIONS
@@ -148,15 +145,6 @@ void serial_debug_send_pack_capacity(void)
 //- **************************************************************************
 //! \brief 
 //- **************************************************************************
-#ifdef SERIAL_DEBUG
-static void pin_set_peripheral_function(uint32_t pinmux)
-{
-  uint8_t port = (uint8_t)((pinmux >> 16)/32);
-  PORT->Group[port].PINCFG[((pinmux >> 16) - (port*32))].bit.PMUXEN = 1;
-  PORT->Group[port].PMUX[((pinmux >> 16) - (port*32))/2].reg &= ~(0xF << (4 * ((pinmux >> 16) & 0x01u)));
-  PORT->Group[port].PMUX[((pinmux >> 16) - (port*32))/2].reg |= (uint8_t)((pinmux & 0x0000FFFF) << (4 * ((pinmux >> 16) & 0x01u)));
-}
-#endif
 
 /*-----------------------------------------------------------------------------
     END OF MODULE
