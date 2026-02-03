@@ -50,6 +50,9 @@
 #define CRC_SIZE                            4
 #define TX_WAIT_TIME                        (2 / SW_TIMER_TICK_MS)
 
+#define BYTE_0x12_REPLACEMENT               (0xDEDB)  // 0x12 is replaced with 0xDB 0xDE to avoid framing error
+#define BYTE_0xDB_REPLACEMENT               (0xDDDB)  // 0xDB is replaced with 0xDB 0xDD
+
 #ifdef SERIAL_DEBUG
   #define PROT_PRINT(...) \
   { \
@@ -102,6 +105,7 @@ static prot_states prot_state      = PROT_INIT;
 static prot_states prot_state_next = PROT_INIT;
 static uint8_t tx_msg_idx          = 0;
 static bool    frame_flag          = false;
+static uint8_t tx_length           = 0;
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL CONSTANTS
@@ -288,7 +292,7 @@ void prot_mainloop(void)
     {
       if(tx_msg_idx < (sizeof(prot_cfg) / sizeof(prot_cfg[0])))
       {
-        serial_send((uint8_t*)prot_cfg[tx_msg_idx].msg_res_ptr, prot_cfg[tx_msg_idx].msg_res_size);
+        serial_send((uint8_t*)prot_cfg[tx_msg_idx].msg_res_ptr, tx_length);
       }
       
       prot_state = PROT_WAIT_FRAME;
@@ -394,7 +398,7 @@ static prot_states prot_analyze_data_frame(prot_states current_state)
               //if(0 == memcmp(&serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX + 1], &prot_cfg[cfg_idx].msg_req_ptr[BMS_MSG_ROLLING_COUNTER_IDX + 1], (prot_cfg[cfg_idx].msg_req_size - (BMS_MSG_ROLLING_COUNTER_IDX + 1) - (CRC_SIZE + MSG_DELIM_SIZE))))
               {
                 prot_assemble_data_frame();
-                res = prot_cfg[cfg_idx].dest_state;
+                res        = prot_cfg[cfg_idx].dest_state;
                 tx_msg_idx = cfg_idx;
               }
             }
@@ -421,8 +425,9 @@ static prot_states prot_analyze_data_frame(prot_states current_state)
           {
             if(0 == memcmp(serial_buffer_rx, prot_cfg[cfg_idx].msg_req_ptr, prot_cfg[cfg_idx].msg_req_cmp_size))
             {
-              res = prot_cfg[cfg_idx].dest_state;
+              res        = prot_cfg[cfg_idx].dest_state;
               tx_msg_idx = cfg_idx;
+              tx_length  = prot_cfg[tx_msg_idx].msg_res_size;
             }
           }
         }
@@ -468,39 +473,89 @@ static prot_states prot_analyze_data_frame(prot_states current_state)
 //- **************************************************************************
 static void prot_assemble_data_frame(void)
 {
+  uint8_t serial_buffer_tx_tmp[sizeof(serial_buffer_tx)] = {0};
   uint16_t soc_percent_x10   = bms_get_soc_x100();
   uint16_t runtime_sec       = bms_get_runtime_seconds();
   bool     charger_connected = port_pin_get_input_level(CHARGER_CONNECTED_PIN);
+  uint8_t  rolling_counter;
   uint32_t crc;
 
   // first copy rolling counter from serial buffer
-  uint8_t rolling_counter = serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX];
+  uint16_t rolling_counter_u16 = (uint16_t)serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX] | ((uint16_t)serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX + 1] << 8);
+
+  if(BYTE_0x12_REPLACEMENT == rolling_counter_u16)
+  {
+    rolling_counter = 0x12;
+  }
+  else if(BYTE_0xDB_REPLACEMENT == rolling_counter_u16)
+  {
+    rolling_counter = 0xDB;
+  }
+  else
+  {
+    rolling_counter = serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX];
+  }
+
   // copy data response to serial buffer
-  memcpy(serial_buffer_tx, msg_bms_data_res, sizeof(msg_bms_data_res));
+  memcpy(serial_buffer_tx_tmp, msg_bms_data_res, sizeof(msg_bms_data_res));
   // copy back rolling counter to response
-  serial_buffer_tx[BMS_MSG_ROLLING_COUNTER_IDX] = rolling_counter;
+  serial_buffer_tx_tmp[BMS_MSG_ROLLING_COUNTER_IDX] = rolling_counter;
   // fill charger connected state
-  serial_buffer_tx[BMS_MSG_CHARGER_CONNECTED_IDX] = charger_connected;
+  serial_buffer_tx_tmp[BMS_MSG_CHARGER_CONNECTED_IDX] = charger_connected;
   // fill trigger state
-  serial_buffer_tx[BMS_MSG_TRIGGER_IDX] = prot_trigger_state;
+  serial_buffer_tx_tmp[BMS_MSG_TRIGGER_IDX] = prot_trigger_state;
   // fill estimated runtime in seconds
-  serial_buffer_tx[BMS_MSG_BAT_RUNTIME_LO_IDX] = (uint8_t)((runtime_sec >> 0) & 0x00FF); // lsb first
-  serial_buffer_tx[BMS_MSG_BAT_RUNTIME_HI_IDX] = (uint8_t)((runtime_sec >> 8) & 0x00FF);
+  serial_buffer_tx_tmp[BMS_MSG_BAT_RUNTIME_LO_IDX] = (uint8_t)((runtime_sec >> 0) & 0x00FF); // lsb first
+  serial_buffer_tx_tmp[BMS_MSG_BAT_RUNTIME_HI_IDX] = (uint8_t)((runtime_sec >> 8) & 0x00FF);
 
   // fill state of charge
-  serial_buffer_tx[BMS_MSG_SOC_LO_IDX] = (uint8_t)((soc_percent_x10 >> 0) & 0x00FF); // lsb first
-  serial_buffer_tx[BMS_MSG_SOC_HI_IDX] = (uint8_t)((soc_percent_x10 >> 8) & 0x00FF);
+  serial_buffer_tx_tmp[BMS_MSG_SOC_LO_IDX] = (uint8_t)((soc_percent_x10 >> 0) & 0x00FF); // lsb first
+  serial_buffer_tx_tmp[BMS_MSG_SOC_HI_IDX] = (uint8_t)((soc_percent_x10 >> 8) & 0x00FF);
   // set mode ... to be implemented 
-  serial_buffer_tx[BMS_MSG_SOC2_LO_IDX] = (uint8_t)((soc_percent_x10 >> 0) & 0x00FF); // lsb first
-  serial_buffer_tx[BMS_MSG_SOC2_HI_IDX] = (uint8_t)((soc_percent_x10 >> 8) & 0x00FF);
+  serial_buffer_tx_tmp[BMS_MSG_SOC2_LO_IDX] = (uint8_t)((soc_percent_x10 >> 0) & 0x00FF); // lsb first
+  serial_buffer_tx_tmp[BMS_MSG_SOC2_HI_IDX] = (uint8_t)((soc_percent_x10 >> 8) & 0x00FF);
   
   // calculate crc
-  crc = calc_crc32(serial_buffer_tx, (sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)));
+  crc = calc_crc32(serial_buffer_tx_tmp, (sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)));
   // fill crc into the message
-  serial_buffer_tx[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 0] = (uint8_t)((crc >> 0)  & 0x000000FFul);  // lsb first
-  serial_buffer_tx[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 1] = (uint8_t)((crc >> 8)  & 0x000000FFul);
-  serial_buffer_tx[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 2] = (uint8_t)((crc >> 16) & 0x000000FFul);
-  serial_buffer_tx[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 3] = (uint8_t)((crc >> 24) & 0x000000FFul);
+  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 0] = (uint8_t)((crc >> 0)  & 0x000000FFul);  // lsb first
+  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 1] = (uint8_t)((crc >> 8)  & 0x000000FFul);
+  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 2] = (uint8_t)((crc >> 16) & 0x000000FFul);
+  serial_buffer_tx_tmp[(sizeof(msg_bms_data_res) - (CRC_SIZE + MSG_DELIM_SIZE)) + 3] = (uint8_t)((crc >> 24) & 0x000000FFul);
+
+  // reset tx length before use 
+  tx_length = 0;
+
+  for (uint8_t src = 0; src < sizeof(msg_bms_data_res); src++)
+  {
+    if(src > 0 && src < (sizeof(msg_bms_data_res) - 1))
+    {
+      if(serial_buffer_tx_tmp[src] == 0x12)
+      {
+        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0x12_REPLACEMENT >> 0) & 0xFF);
+        tx_length++;
+        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0x12_REPLACEMENT >> 8) & 0xFF);
+        tx_length++;
+      }
+      else if(serial_buffer_tx_tmp[src] == 0xDB)
+      {
+        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0xDB_REPLACEMENT >> 0) & 0xFF);
+        tx_length++;
+        serial_buffer_tx[tx_length] = (uint8_t)((BYTE_0xDB_REPLACEMENT >> 8) & 0xFF);
+        tx_length++;
+      }
+      else
+      {
+        serial_buffer_tx[tx_length] = serial_buffer_tx_tmp[src];
+        tx_length++;
+      }
+    }
+    else
+    {// copy frame delimiters without conversion
+      serial_buffer_tx[tx_length] = serial_buffer_tx_tmp[src];
+      tx_length++;
+    }
+  }
 }
 
 /*-----------------------------------------------------------------------------
