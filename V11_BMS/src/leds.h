@@ -42,7 +42,6 @@ typedef enum
 extern void leds_init(void);
 extern void leds_sequence(void) ;
 extern void leds_blink_leds(int);
-extern void leds_show_pack_flat(void);
 extern void leds_off(void);
 extern void leds_on(void);
 extern void leds_set_led_duty(leds_t led, uint8_t duty_ppt);

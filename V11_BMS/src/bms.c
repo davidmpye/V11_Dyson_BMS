@@ -122,10 +122,14 @@ void bms_init(void)
   //Initialise the USART we need to talk to the vacuum cleaner
   serial_init();
   
+  bq7693_disable_discharge();
+
+  //Do pretty welcome sequence
+  leds_sequence();
+
   //Enable interrupts
   interrupts_init();
 
-  bq7693_disable_discharge();
 #ifdef SERIAL_DEBUG
   serial_debug_init();
 #endif
@@ -609,6 +613,8 @@ static void bms_handle_trigger_pulled(void)
 //- **************************************************************************
 static void bms_handle_sleep(void)
 {
+  leds_sequence();
+
   pins_deinit();
 
   delay_ms(1000);
@@ -676,8 +682,8 @@ static void bms_handle_fault(void)
   {
 		if (bms_error == BMS_ERR_PACK_DISCHARGED || bms_error == BMS_ERR_UNDERVOLTAGE ) 
     {
-			//If the problem is just a flat pack, blink the lowest battery segment three times.
-			leds_show_pack_flat();
+			//If the problem is just a flat pack, blink
+			leds_blink_leds(50);
 
 			//We also need to update the pack capacity as it's flat at this point.
 			if (eeprom_data.current_charge_level > 0) 
@@ -689,7 +695,7 @@ static void bms_handle_fault(void)
 		else 
     {
 			//Flash the red error led the number of times indicated by the fault code.
-			for (int i=0; i<bms_error; ++i)
+			for (int i=0; i < bms_error; ++i)
       {
 				leds_blink_leds(500);
 			}
@@ -868,7 +874,7 @@ static void bms_handle_charger_unplugged(void)
   uint8_t highest_cell = 0;
   uint8_t lowest_cell = 0;
   
-  for (int i=0; i<7;++i)
+  for (int i=0; i < 7; ++i)
   {
     if (cell_voltages[i] > cell_voltages[highest_cell])
     {
@@ -883,7 +889,7 @@ static void bms_handle_charger_unplugged(void)
   uint16_t spread = cell_voltages[highest_cell] - cell_voltages[lowest_cell];
   
   //Flash the error led for 100ms for each 50mV the pack is out of balance
-  for (int i=0; i<round(spread/50); ++i)
+  for (int i = 0; i < round(spread/50); ++i)
   {
     leds_blink_leds(100);
   }
