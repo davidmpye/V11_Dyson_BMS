@@ -28,7 +28,7 @@
     DECLARATION OF LOCAL MACROS/#DEFINES
 -----------------------------------------------------------------------------*/
 //speed of LED sequence
-#define LED_SEQ_TIME          50
+#define LED_SEQ_TIME          25
 #define TIMRER_FREQ_HZ        (8000000ul)
 #define PWM_FREQ_HZ           (200ul)
 #define CAPTURE_VALUE         (TIMRER_FREQ_HZ / PWM_FREQ_HZ)
@@ -94,15 +94,15 @@ static const leds_cfg_t leds_cfg[] =
 //- **************************************************************************
 void leds_sequence(void)
 {
-  for(uint8_t j = 0; j < 5; j++)
+  for(int j = 0; j < 6; j++)
   {
-    for (uint8_t i = 0; i < (uint8_t)LEDS_NUM; ++i)
+    for (int i = 0; i < (uint8_t)LEDS_NUM; ++i)
     {
       leds_set_led_duty((leds_t)i, 100);
       sw_timer_delay_ms(LED_SEQ_TIME);
     }
 
-    for (uint8_t i = ((uint8_t)LEDS_NUM) - 1; i >= 0; --i)
+    for (int i = ((uint8_t)LEDS_NUM) - 1; i >= 0; --i)
     {
       leds_set_led_duty((leds_t)i, 0);
       sw_timer_delay_ms(LED_SEQ_TIME);
