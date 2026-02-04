@@ -121,8 +121,6 @@ void bms_init(void)
   
   //Initialise the USART we need to talk to the vacuum cleaner
   serial_init();
-  
-  bq7693_disable_discharge();
 
   //Do pretty welcome sequence
   leds_sequence();

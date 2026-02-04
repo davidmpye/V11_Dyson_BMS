@@ -95,7 +95,7 @@ void bq7693_init()
   bq7693_write_register(CC_CFG, 0x19); //'magic' value as per datasheet.
   bq7693_write_register(SYS_CTRL2, 0x40); //CC_EN - enable continuous operation of coulomb counter
 
-  bq7693_write_register(SYS_CTRL1, 0x18); //ADC_EN, TEMP_SEL  
+  bq7693_write_register(SYS_CTRL1, 0x10); //ADC_EN  
   
   bq7693_read_register(SYS_STAT, 1, &scratch1);
   bq7693_write_register(SYS_STAT, scratch1); //Explicitly clear any set bits in the SYS_STAT register by writing them back. 
