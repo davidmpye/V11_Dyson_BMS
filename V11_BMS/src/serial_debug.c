@@ -65,10 +65,6 @@ char *debug_msg_buffer = debug_buffer;
 void serial_debug_init()
 {
 #ifdef SERIAL_DEBUG
-  //Set up the pinmux settings for SERCOM0
-  //pin_set_peripheral_function(PINMUX_PA11C_SERCOM0_PAD3);
-  //pin_set_peripheral_function(PINMUX_PA10C_SERCOM0_PAD2);
-  
   struct usart_config config_usart;
   usart_get_config_defaults(&config_usart);
   
