@@ -31,7 +31,7 @@
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL VARIABLES
 -----------------------------------------------------------------------------*/
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
 static struct usart_module debug_usart;
 static char debug_buffer[80];
 #endif
@@ -44,7 +44,7 @@ static char debug_buffer[80];
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL VARIABLES
 -----------------------------------------------------------------------------*/
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
 char *debug_msg_buffer = debug_buffer;
 #endif
 
@@ -64,7 +64,7 @@ char *debug_msg_buffer = debug_buffer;
 //- **************************************************************************
 void serial_debug_init()
 {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
   struct usart_config config_usart;
   usart_get_config_defaults(&config_usart);
   
@@ -94,7 +94,7 @@ void serial_debug_init()
 //- **************************************************************************
 void serial_debug_send_message(const char *msg)
 {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
   size_t msg_len = strlen(msg);
 
   if(msg_len > 0)
@@ -109,7 +109,7 @@ void serial_debug_send_message(const char *msg)
 //- **************************************************************************
 void serial_debug_send_cell_voltages(void)
 {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
   uint16_t *cell_voltages = bq7693_get_cell_voltages();
   
   serial_debug_send_message("Pack cell voltages:\r\n");
@@ -126,7 +126,7 @@ void serial_debug_send_cell_voltages(void)
 //- **************************************************************************
 void serial_debug_send_pack_capacity(void)
 {
-#ifdef SERIAL_DEBUG
+#if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
   sprintf(debug_msg_buffer, "Pack capacity %ldmAh\r\n", eeprom_data.current_charge_level/1000);
   serial_debug_send_message(debug_msg_buffer);
 #endif

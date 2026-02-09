@@ -19,8 +19,8 @@
 /*-----------------------------------------------------------------------------
     DECLARATION OF LOCAL MACROS/#DEFINES
 -----------------------------------------------------------------------------*/
-#define DEBUG_RX_RAW                        1
-#define DEBUG_RX_ANALYZED                   1
+#define PROT_DEBUG_RX_RAW                   1
+#define PROT_DEBUG_RX_ANALYZED              1
 
 
 #define MSG_DELIM_IDX                       0
@@ -45,7 +45,7 @@
 #define BYTE_0x12_REPLACEMENT               (0xDEDB)  // 0x12 is replaced with 0xDB 0xDE to avoid framing error
 #define BYTE_0xDB_REPLACEMENT               (0xDDDB)  // 0xDB is replaced with 0xDB 0xDD to avoid framing error
 
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
   #define PROT_PRINT(...) \
   { \
     sprintf(debug_msg_buffer, __VA_ARGS__); \
@@ -86,7 +86,7 @@ typedef struct
   uint8_t        msg_req_size;
   uint8_t        msg_res_size;
   prot_states    dest_state;
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
   bool           dump_bytes;
   const char*    debug_str;
 #endif
@@ -119,13 +119,13 @@ static rx_states rx_state          = PROT_RX_INIT;
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL VARIABLES
 -----------------------------------------------------------------------------*/
-#if (DEBUG_RX_RAW != 0)
+#if (PROT_DEBUG_RX_RAW != 0)
 volatile rx_debug_t rx_debug_raw[32]      = {0};
 volatile uint8_t rx_debug_raw_id_mask     = 0;
 volatile uint8_t rx_debug_raw_cnt         = 0;
 #endif
 
-#if (DEBUG_RX_ANALYZED != 0)
+#if (PROT_DEBUG_RX_ANALYZED != 0)
 volatile rx_debug_t rx_debug_analyzed[32]  = {0};
 volatile uint8_t rx_debug_analyzed_id_mask = 0;
 volatile uint8_t rx_debug_analyzed_cnt     = 0;
@@ -187,9 +187,9 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_trig_req_0x11_init),
     .msg_res_size     = sizeof(msg_bms_trig_res_0x11_init),
     .dest_state       = PROT_TX_FRAME,
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
-    .debug_str        = "PROT:TRIG_INIT\r\n",
+    .debug_str        = "TRG_INI\r\n",
 #endif
   },
   {
@@ -199,7 +199,7 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_data_req),
     .msg_res_size     = sizeof(msg_bms_data_res),
     .dest_state       = PROT_PREPARE_DATA_FRAME,
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = NULL,
 #endif
@@ -211,7 +211,7 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_trig_req_0x11),
     .msg_res_size     = 0,
     .dest_state       = PROT_TX_TRIGGER_RESP,
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = NULL
 #endif
@@ -223,9 +223,9 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_v11_handshake_req),
     .msg_res_size     = sizeof(msg_bms_v11_handshake_res),
     .dest_state       = PROT_TX_FRAME,
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
-    .debug_str        = "PROT:V11_HANDSHAKE\r\n",
+    .debug_str        = "V11\r\n",
 #endif
   },
   {
@@ -235,9 +235,9 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_v15_handshake_req),
     .msg_res_size     = sizeof(msg_bms_v15_handshake_res),
     .dest_state       = PROT_TX_FRAME,
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
-    .debug_str        = "PROT:V15_HANDSHAKE\r\n",
+    .debug_str        = "V15\r\n",
 #endif
   },
 };
@@ -434,7 +434,7 @@ void prot_serial_rx_callback(uint8_t ch)
         }
 
         rx_state = (ch == MSG_DELIM_CHAR) ? (PROT_RX_FRAME_RECEIVED) : (rx_state); // check new frame is detected
-#if (DEBUG_RX_RAW != 0)
+#if (PROT_DEBUG_RX_RAW != 0)
 
         if((rx_debug_raw_id_mask == 0) || ((rx_debug_raw_id_mask ^ serial_buffer_rx[1]) == 0))
         {
@@ -496,7 +496,7 @@ static prot_states prot_analyze_frame(prot_states current_state)
               res         = prot_cfg[cfg_idx].dest_state;
               tx_length   = prot_cfg[cfg_idx].msg_res_size;
               tx_msg_idx  = cfg_idx;
-#ifdef SERIAL_DEBUG
+#ifdef PROT_DEBUG_PRINT
               if(prot_cfg[cfg_idx].debug_str != NULL)
               {
                 PROT_PRINT(prot_cfg[cfg_idx].debug_str);
@@ -512,7 +512,7 @@ static prot_states prot_analyze_frame(prot_states current_state)
                 PROT_PRINT("\r\n");
               }
 #endif
-#if (DEBUG_RX_ANALYZED != 0)
+#if (PROT_DEBUG_RX_ANALYZED != 0)
               if((rx_debug_analyzed_id_mask == 0) || ((rx_debug_analyzed_id_mask ^ serial_buffer_rx[1]) == 0))
               {
                 // store debug info
