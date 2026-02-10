@@ -687,7 +687,7 @@ static void bms_handle_discharging(void)
   {
 		//Sanity check, hopefully already checked prior to here!
 		bq7693_enable_discharge();
-    sw_timer_delay_ms(100);
+    sw_timer_delay_ms(500);
     prot_set_trigger(true);
 	}
 
@@ -696,7 +696,7 @@ static void bms_handle_discharging(void)
     if (!port_pin_get_input_level(TRIGGER_PRESSED_PIN)) 
     {
       prot_set_trigger(false);
-      sw_timer_delay_ms(300);
+      sw_timer_delay_ms(500);
       //Trigger released.
       bq7693_disable_discharge();
       //Clear the battery status etc.
