@@ -14,7 +14,7 @@ src\ASF\sam0\drivers\sercom\usart\usart_interrupt.c
 
 src\bms_adc.c
 
-src\crc32.c
+src\crc.c
 
 src\ntc.c
 

@@ -12,7 +12,7 @@
 #include "bms.h"
 #include "bms_adc.h"
 #include "ntc.h"
-#include "crc32.h"
+#include "crc.h"
 #include "sw_timer.h"
 #include "protocol.h"
 
@@ -179,7 +179,7 @@ void bms_interrupt_process(void)
       current_filt_mA = current_filt_sum_mA >> 16;
       
       //Ignore tiny values.
-      if ( (ccVal > 0 && ccVal > 2)  || (ccVal < 0 && ccVal < -2) )
+      //if ( (ccVal > 0 && ccVal > 2)  || (ccVal < 0 && ccVal < -2) )
       {
         int32_t cc_uah;
         //i = V/R
@@ -196,7 +196,7 @@ void bms_interrupt_process(void)
         //We thought the pack was full, but it's still charging, so we need to update its' size.
         if (eeprom_data.current_charge_level > eeprom_data.total_pack_capacity)
         {
-          eeprom_data.total_pack_capacity = eeprom_data.current_charge_level;
+          eeprom_data.current_charge_level = eeprom_data.total_pack_capacity;
         }
         
         //We thought the pack was empty, but it isn't, so again, we need to update our estimate of what it can hold!
@@ -745,7 +745,7 @@ static void bms_handle_fault(void)
 			leds_blink_leds(50);
 
 			//We also need to update the pack capacity as it's flat at this point.
-			if (eeprom_data.current_charge_level > 0) 
+			if (eeprom_data.current_charge_level > 0 && eeprom_data.total_pack_capacity > eeprom_data.current_charge_level) 
       {
 				eeprom_data.total_pack_capacity -= eeprom_data.current_charge_level;
 				eeprom_data.current_charge_level = 0;				

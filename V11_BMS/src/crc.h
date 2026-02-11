@@ -1,13 +1,13 @@
 /*
- * crc32.h
+ * crc.h
  *
  * Created: 21-Jan-26 12:27:30
  *  Author: GYV1SF4
  */ 
 
 
-#ifndef CRC32_H_
-#define CRC32_H_
+#ifndef CRC_H_
+#define CRC_H_
 /*-----------------------------------------------------------------------------
   INCLUDE FILES
 ---------------------------------------------------------------------------- */
@@ -33,8 +33,9 @@
   DECLARATION OF GLOBAL FUNCTIONS
 -----------------------------------------------------------------------------*/
 extern uint32_t calc_crc32(uint8_t * data_ptr, uint16_t len);
+extern uint16_t calc_crc16_C9A7(uint8_t * data_ptr, uint16_t len);
 
 /*-----------------------------------------------------------------------------
   END OF MODULE DEFINITION FOR MULTIPLE INCLUSION
 -----------------------------------------------------------------------------*/
-#endif /* CRC32_H_ */
+#endif /* CRC_H_ */

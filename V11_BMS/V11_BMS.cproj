@@ -739,10 +739,10 @@
     <Compile Include="src\bms_adc.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\crc32.c">
+    <Compile Include="src\crc.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\crc32.h">
+    <Compile Include="src\crc.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\ntc.c">

@@ -12,7 +12,7 @@
 #include "string.h"
 #include "serial.h"
 #include "assert.h"
-#include "crc32.h"
+#include "crc.h"
 #include "bms.h"
 #include "bms_adc.h"
 
@@ -78,6 +78,8 @@ typedef enum
   PROT_RX_FRAME_RECEIVED
 }rx_states;
 
+typedef void (*msg_callback)(void);
+
 typedef struct
 {
   const uint8_t* msg_req_ptr;
@@ -86,6 +88,7 @@ typedef struct
   uint8_t        msg_req_size;
   uint8_t        msg_res_size;
   prot_states    dest_state;
+  msg_callback   callback;
 #ifdef PROT_DEBUG_PRINT
   bool           dump_bytes;
   const char*    debug_str;
@@ -178,6 +181,7 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_data_req),
     .msg_res_size     = sizeof(msg_bms_data_res),
     .dest_state       = PROT_PREPARE_DATA_FRAME,
+    .callback         = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = NULL,
@@ -190,6 +194,7 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_trig_req_ok),
     .msg_res_size     = 0,
     .dest_state       = PROT_TX_TRIGGER_RESP,
+    .callback         = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = NULL
@@ -202,6 +207,7 @@ static const prot_cfg_t prot_cfg[] =
   //  .msg_req_size     = sizeof(msg_vac_trig_req_nok),
   //  .msg_res_size     = sizeof(msg_bms_trig_off_res_nok),
   //  .dest_state       = PROT_TX_FRAME,
+  //  .callback         = NULL,
   //  #ifdef PROT_DEBUG_PRINT
   //  .dump_bytes       = false,
   //  .debug_str        = "TRG_NOK\r\n",
@@ -214,6 +220,7 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_v11_handshake_req),
     .msg_res_size     = sizeof(msg_bms_v11_handshake_res),
     .dest_state       = PROT_TX_FRAME,
+    .callback         = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = "V11\r\n",
@@ -226,6 +233,7 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_v15_handshake_req),
     .msg_res_size     = sizeof(msg_bms_v15_handshake_res),
     .dest_state       = PROT_TX_FRAME,
+    .callback         = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = "V15\r\n",

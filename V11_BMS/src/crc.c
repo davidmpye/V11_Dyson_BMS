@@ -1,5 +1,5 @@
 /*
- * crc32.c
+ * crc.c
  *
  * Created: 21-Jan-26 12:27:18
  *  Author: GYV1SF4
@@ -7,7 +7,7 @@
  /*-----------------------------------------------------------------------------
     INCLUDE FILES
 -----------------------------------------------------------------------------*/
-#include "crc32.h"
+#include "crc.h"
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL VARIABLES
@@ -30,6 +30,8 @@
 #define CRC_POLYNOMIAL_32_REFLECT   (uint32_t)(0xEDB88320)
 #define CRC_FINAL_XOR_CRC32         (uint32_t)(0x00000000)
 
+#define CRC16_INIT_0x396F_REFLECT   (uint16_t)(0xF69C)
+
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL TYPES
 -----------------------------------------------------------------------------*/
@@ -48,6 +50,9 @@ static const uint32_t c_wCRC32Table[16] =
   0xEDB88320, 0xF00F9344, 0xD6D6A3E8, 0xCB61B38C,
   0x9B64C2B0, 0x86D3D2D4, 0xA00AE278, 0xBDBDF21C,
 };
+
+const uint16_t crc16_C9A7_table_lo[] = { 0x0000,0x5B1B,0xB636,0xED2D,0xA74B,0xFC50,0x117D,0x4A66,0x85B1,0xDEAA,0x3387,0x689C,0x22FA,0x79E1,0x94CC,0xCFD7 };
+const uint16_t crc16_C9A7_table_hi[] = { 0x0000,0xC045,0x4BAD,0x8BE8,0x975A,0x571F,0xDCF7,0x1CB2,0xE593,0x25D6,0xAE3E,0x6E7B,0x72C9,0xB28C,0x3964,0xF921 };
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL FUNCTIONS PROTOTYPES
@@ -78,11 +83,43 @@ uint32_t calc_crc32(uint8_t * data_ptr, uint16_t len)
   for (i = 0; i < len; i++)
   {
     wCRC32 = (wCRC32 >> 4) ^ c_wCRC32Table[(wCRC32 & 0x0000000F) ^ (*data_ptr & 0x0F)];
-    wCRC32 = (wCRC32 >> 4) ^ c_wCRC32Table[(wCRC32 & 0x0000000F) ^ (*data_ptr++ >> 4)];
+    wCRC32 = (wCRC32 >> 4) ^ c_wCRC32Table[(wCRC32 & 0x0000000F) ^ (*data_ptr >> 4)];
+    data_ptr++;
   }
 
   return (wCRC32);
 }
+
+//- **************************************************************************
+//! \brief 
+//!         CRC32
+//*!        Poly: 0xc9a7
+//*!        Init: 0x396f
+//*!        RefIn: True
+//*!        RefOut: True
+//*!        XorOut: 0x00000000
+//- **************************************************************************
+uint16_t calc_crc16_C9A7(uint8_t * data_ptr, uint16_t len)
+{
+  uint8_t tbl_tdx;
+  uint16_t i;
+  uint16_t crc_u16 = CRC16_INIT_0x396F_REFLECT;
+
+  if(NULL == data_ptr)
+  {
+    return 0;
+  }
+
+  for (i = 0; i < len; i++)
+  {
+    tbl_tdx = (crc_u16 ^ *data_ptr) & 0xFF;
+    crc_u16 = (crc_u16 >> 8) ^ crc16_C9A7_table_lo[tbl_tdx & 0x0F] ^ crc16_C9A7_table_hi[tbl_tdx >> 4];
+    data_ptr++;
+  }
+
+  return (crc_u16);
+}
+
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL FUNCTIONS
 -----------------------------------------------------------------------------*/
