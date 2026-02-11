@@ -62,7 +62,6 @@ typedef enum
   PROT_INIT,
   PROT_IDLE,
   PROT_WAIT_FRAME,
-  PROT_PREPARE_DATA_FRAME,
   PROT_TX_FRAME,
   PROT_TX_TRIGGER_RESP,
   PROT_WAIT_STATE,
@@ -88,7 +87,8 @@ typedef struct
   uint8_t        msg_req_size;
   uint8_t        msg_res_size;
   prot_states    dest_state;
-  msg_callback   callback;
+  msg_callback   rx_callback;
+  msg_callback   tx_callback;
 #ifdef PROT_DEBUG_PRINT
   bool           dump_bytes;
   const char*    debug_str;
@@ -119,7 +119,6 @@ static uint8_t tx_msg_idx          = 0;
 static uint8_t tx_length           = 0;
 static rx_states rx_state          = PROT_RX_INIT;
 
-
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL VARIABLES
 -----------------------------------------------------------------------------*/
@@ -139,6 +138,15 @@ uint16_t discarded_frames_cnt = 0;
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL CONSTANTS
 -----------------------------------------------------------------------------*/
+
+/*-----------------------------------------------------------------------------
+    DEFINITION OF LOCAL FUNCTIONS PROTOTYPES
+-----------------------------------------------------------------------------*/
+static prot_states prot_analyze_frame(prot_states current_state);
+static void prot_assemble_data_frame(void);
+static uint8_t prot_scramble_frame(uint8_t * dest, const uint8_t * src, size_t dest_len, size_t src_len);
+static void prot_mode_handshake_callback(void);
+static void prot_mode_sleep_callback(void);
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL CONSTANTS
@@ -172,6 +180,9 @@ static const uint8_t msg_bms_trig_on_res_ok[]   = {0x12, 0x1B, 0x00, 0x5C, 0x01,
 static const uint8_t msg_bms_trig_off_res_ok[]  = {0x12, 0x1B, 0x00, 0x5C, 0x01, 0xC0, 0x03, 0x01, 0x01, 0x08, 0x10, 0x11, 0x01, 0x82, 0x98, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x81, 0x01, 0x00, 0x00, 0x71, 0x76, 0x13, 0x64, 0x12};
 static const uint8_t msg_bms_trig_off_res_nok[] = {0x12, 0x1B, 0x00, 0x5C, 0x01, 0xC0, 0x03, 0x01, 0x01, 0x08, 0x10, 0xDB, 0xDE, 0x01, 0x82, 0x98, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x81, 0x01, 0x00, 0x00, 0xF5, 0x2D, 0x89, 0x37, 0x12};
 
+static const uint8_t msg_vac_trig_req_sleep[]  = {0x12, 0x16, 0x00, 0xAE, 0x00, 0xC0, 0x01, 0x03, 0x01, 0x07, 0x10, 0x11, 0x00, 0x82, 0x00, 0x00, 0x00, 0x00, 0x02, 0x10, 0x00, 0x81, 0x48, 0x54, 0x1C, 0xBC, 0x12};
+static const uint8_t msg_bms_trig_res_sleep[]  = {0x12, 0x1B, 0x00, 0x5C, 0x01, 0xC0, 0x03, 0x01, 0x01, 0x08, 0x10, 0x11, 0x01, 0x82, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x81, 0x01, 0x00, 0x00, 0xC0, 0x30, 0xAD, 0x8F, 0x12};
+
 static const prot_cfg_t prot_cfg[] = 
 {
   {
@@ -180,13 +191,28 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_cmp_size = 6,
     .msg_req_size     = sizeof(msg_vac_data_req),
     .msg_res_size     = sizeof(msg_bms_data_res),
-    .dest_state       = PROT_PREPARE_DATA_FRAME,
-    .callback         = NULL,
+    .dest_state       = PROT_TX_FRAME,
+    .rx_callback      = prot_assemble_data_frame,
+    .tx_callback      = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = NULL,
 #endif
   },
+//  {
+//    .msg_req_ptr      = msg_vac_trig_req_sleep,
+//    .msg_res_ptr      = msg_bms_trig_res_sleep,
+//    .msg_req_cmp_size = sizeof(msg_vac_trig_req_sleep),
+//    .msg_req_size     = sizeof(msg_vac_trig_req_sleep),
+//    .msg_res_size     = sizeof(msg_bms_trig_res_sleep),
+//    .dest_state       = PROT_TX_FRAME,
+//    .rx_callback      = prot_mode_sleep_callback,
+//    .tx_callback      = NULL,
+//#ifdef PROT_DEBUG_PRINT
+//    .dump_bytes       = false,
+//    .debug_str        = "SLEEP\r\n",
+//#endif
+//  },
   {
     .msg_req_ptr      = msg_vac_trig_req_ok,
     .msg_res_ptr      = NULL,
@@ -194,25 +220,13 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_trig_req_ok),
     .msg_res_size     = 0,
     .dest_state       = PROT_TX_TRIGGER_RESP,
-    .callback         = NULL,
+    .tx_callback      = NULL,
+    .rx_callback      = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = NULL
 #endif
   },
-  //{
-  //  .msg_req_ptr      = msg_vac_trig_req_nok,
-  //  .msg_res_ptr      = msg_bms_trig_off_res_nok,
-  //  .msg_req_cmp_size = 12,
-  //  .msg_req_size     = sizeof(msg_vac_trig_req_nok),
-  //  .msg_res_size     = sizeof(msg_bms_trig_off_res_nok),
-  //  .dest_state       = PROT_TX_FRAME,
-  //  .callback         = NULL,
-  //  #ifdef PROT_DEBUG_PRINT
-  //  .dump_bytes       = false,
-  //  .debug_str        = "TRG_NOK\r\n",
-  //  #endif
-  //},
   {
     .msg_req_ptr      = msg_vac_v11_handshake_req,
     .msg_res_ptr      = msg_bms_v11_handshake_res,
@@ -220,7 +234,8 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_v11_handshake_req),
     .msg_res_size     = sizeof(msg_bms_v11_handshake_res),
     .dest_state       = PROT_TX_FRAME,
-    .callback         = NULL,
+    .rx_callback      = prot_mode_handshake_callback,
+    .tx_callback      = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = "V11\r\n",
@@ -233,7 +248,8 @@ static const prot_cfg_t prot_cfg[] =
     .msg_req_size     = sizeof(msg_vac_v15_handshake_req),
     .msg_res_size     = sizeof(msg_bms_v15_handshake_res),
     .dest_state       = PROT_TX_FRAME,
-    .callback         = NULL,
+    .rx_callback      = prot_mode_handshake_callback,
+    .tx_callback      = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
     .debug_str        = "V15\r\n",
@@ -241,12 +257,7 @@ static const prot_cfg_t prot_cfg[] =
   },
 };
 
-/*-----------------------------------------------------------------------------
-    DEFINITION OF LOCAL FUNCTIONS PROTOTYPES
------------------------------------------------------------------------------*/
-static prot_states prot_analyze_frame(prot_states current_state);
-static void prot_assemble_data_frame(void);
-static uint8_t prot_scramble_frame(uint8_t * dest, const uint8_t * src, size_t dest_len, size_t src_len);
+
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL FUNCTIONS
@@ -328,20 +339,18 @@ void prot_mainloop(void)
     }
     break;
     //------------------------------------------------------------------------
-    case PROT_PREPARE_DATA_FRAME:
-    {
-      prot_assemble_data_frame();
-      prot_state = PROT_TX_FRAME;
-    }
-    break;
-    //------------------------------------------------------------------------
     case PROT_TX_FRAME:
     {
       if(tx_msg_idx < (sizeof(prot_cfg) / sizeof(prot_cfg[0])))
       {
         serial_send((uint8_t*)prot_cfg[tx_msg_idx].msg_res_ptr, tx_length);
+
+        if(prot_cfg[tx_msg_idx].tx_callback != NULL)
+        {
+          prot_cfg[tx_msg_idx].tx_callback();
+        }
       }
-      
+            
       prot_state = PROT_WAIT_FRAME;
     }
     break;
@@ -354,6 +363,14 @@ void prot_mainloop(void)
         serial_send((uint8_t*)msg_bms_trig_on_res_ok, sizeof(msg_bms_trig_on_res_ok));
       else
         serial_send((uint8_t*)msg_bms_trig_off_res_ok, sizeof(msg_bms_trig_off_res_ok));
+      
+      if(tx_msg_idx < (sizeof(prot_cfg) / sizeof(prot_cfg[0])))
+      {
+        if(prot_cfg[tx_msg_idx].tx_callback != NULL)
+        {
+          prot_cfg[tx_msg_idx].tx_callback();
+        }
+      }
 
       prot_state = PROT_WAIT_FRAME;
     }
@@ -502,6 +519,12 @@ static prot_states prot_analyze_frame(prot_states current_state)
               res         = prot_cfg[cfg_idx].dest_state;
               tx_length   = prot_cfg[cfg_idx].msg_res_size;
               tx_msg_idx  = cfg_idx;
+
+              if(prot_cfg[cfg_idx].rx_callback != NULL)
+              {
+                prot_cfg[cfg_idx].rx_callback();
+              }
+
 #ifdef PROT_DEBUG_PRINT
               if(prot_cfg[cfg_idx].debug_str != NULL)
               {
@@ -628,6 +651,20 @@ static uint8_t prot_scramble_frame(uint8_t * dest, const uint8_t * src, size_t d
   }
 
   return length;
+}
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static void prot_mode_handshake_callback(void)
+{
+}
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static void prot_mode_sleep_callback(void)
+{
 }
 
 /*-----------------------------------------------------------------------------
