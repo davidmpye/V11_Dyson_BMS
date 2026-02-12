@@ -136,9 +136,6 @@ void bms_init(void)
   //Initialise the USART we need to talk to the vacuum cleaner
   serial_init();
 
-  //Do pretty welcome sequence
-  leds_sequence();
-
   //Enable interrupts
   interrupts_init();
 
@@ -272,19 +269,23 @@ void bms_mainloop(void)
   while (1)
   {
     BMS_PRINT("BMS: %s\r\n", bms_state_names[bms_state]);
-  
+
     switch (bms_state)
     {
     //-----------------------------------------------------------------------
       case BMS_INIT:
-        // check pack state
-        if (bms_is_safe_to_charge() && bms_is_safe_to_discharge())
-          bms_state = BMS_IDLE;
-        else
-          bms_state = BMS_FAULT;
-
+        bms_state = BMS_IDLE;
         port_pin_set_output_level(PRECHARGE_PIN, true);
 
+        leds_sequence();
+
+#if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
+        //Initial debug blurb
+        serial_debug_send_message("Dyson V11/V15 BMS After market firmware\r\n");
+        serial_debug_send_cell_voltages();
+        serial_debug_send_pack_capacity();
+#endif
+        
       break;
       //-----------------------------------------------------------------------
       case BMS_IDLE:
@@ -580,13 +581,6 @@ static bool bms_is_pack_full(void)
 {
   uint16_t *cell_voltages = bq7693_get_cell_voltages();
 
-#ifdef SERIAL_DEBUG
-  //for (int i=0; i<7; ++i)
-  //{
-  //  BMS_PRINT("Cell %d: %d mV, target %d mV\r\n", i, cell_voltages[i], CELL_FULL_CHARGE_VOLTAGE);
-  //}
-#endif
-
   //If any cells are at their full charge voltage, we are full.
   for (int i=0; i<7; ++i)
   {
@@ -659,6 +653,11 @@ static void bms_handle_trigger_pulled(void)
 //- **************************************************************************
 static void bms_handle_sleep(void)
 {
+
+  port_pin_set_output_level(ENABLE_CHARGE_PIN, false);
+  bq7693_disable_charge();
+  bq7693_disable_discharge();
+
   leds_sequence();
 
   pins_deinit();
@@ -687,7 +686,7 @@ static void bms_handle_discharging(void)
   {
 		//Sanity check, hopefully already checked prior to here!
 		bq7693_enable_discharge();
-    sw_timer_delay_ms(500);
+    sw_timer_delay_ms(300);
     prot_set_trigger(true);
 	}
 
@@ -696,7 +695,7 @@ static void bms_handle_discharging(void)
     if (!port_pin_get_input_level(TRIGGER_PRESSED_PIN)) 
     {
       prot_set_trigger(false);
-      sw_timer_delay_ms(500);
+      sw_timer_delay_ms(300);
       //Trigger released.
       bq7693_disable_discharge();
       //Clear the battery status etc.
@@ -799,7 +798,6 @@ static void bms_handle_charger_connected_not_charging(void)
   {
     if (!port_pin_get_input_level(CHARGER_CONNECTED_PIN))
     {
-    port_pin_set_output_level(ENABLE_CHARGE_PIN, false);
       bms_state = BMS_IDLE;
       return;
     }
@@ -914,7 +912,7 @@ static void bms_handle_charging(void)
     {
       //After FULL_CHARGE_PAUSE_COUNT pauses, we are full.
       //Disable the charging
-      port_pin_set_output_level(ENABLE_CHARGE_PIN, true);
+      port_pin_set_output_level(ENABLE_CHARGE_PIN, false);
       bq7693_disable_charge();
       
       leds_off();

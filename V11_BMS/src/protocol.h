@@ -33,9 +33,7 @@
   DECLARATION OF GLOBAL FUNCTIONS
 -----------------------------------------------------------------------------*/
 extern void prot_init(void);
-extern void prot_set_enable(bool enable);
 extern void prot_set_trigger(bool trigger_state);
-extern bool prot_is_vacuum_connected(void);
 extern void prot_reset(void);
 extern void prot_mainloop(void);
 extern void prot_serial_rx_callback(uint8_t ch);

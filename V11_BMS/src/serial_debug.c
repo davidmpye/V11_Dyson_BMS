@@ -81,11 +81,6 @@ void serial_debug_init()
   while (usart_init(&debug_usart,SERCOM0, &config_usart) != STATUS_OK) { }
   //Enable
   usart_enable(&debug_usart);
-  
-  //Initial debug blurb
-  serial_debug_send_message("Dyson V11/V15 BMS After market firmware\r\n");
-  serial_debug_send_cell_voltages();
-  serial_debug_send_pack_capacity();
 #endif
 }
 
@@ -112,22 +107,28 @@ void serial_debug_send_cell_voltages(void)
 #if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
   uint16_t *cell_voltages = bq7693_get_cell_voltages();
   
-  serial_debug_send_message("Pack cell voltages:\r\n");
+  serial_debug_send_message("V:");
   
-  for (int i=0; i<7; ++i) 
+  for (int i=0; i<7; ++i)
   {
-    sprintf(debug_msg_buffer, "Cell %d: %d mV\r\n", i, cell_voltages[i]);
+    sprintf(debug_msg_buffer, " %d ", cell_voltages[i]);
     serial_debug_send_message(debug_msg_buffer);
   }
+
+  serial_debug_send_message(debug_msg_buffer);
+  sprintf(debug_msg_buffer, "P: %d\r\n", bq7693_get_pack_voltage());
+
+  serial_debug_send_message(debug_msg_buffer);
 #endif
 }
+
 //- **************************************************************************
 //! \brief
 //- **************************************************************************
 void serial_debug_send_pack_capacity(void)
 {
 #if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
-  sprintf(debug_msg_buffer, "Pack capacity %ldmAh\r\n", eeprom_data.current_charge_level/1000);
+  sprintf(debug_msg_buffer, "C: %ld mAh\r\n", eeprom_data.current_charge_level/1000);
   serial_debug_send_message(debug_msg_buffer);
 #endif
 }
