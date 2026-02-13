@@ -45,7 +45,7 @@
  *  EIC edge detection or filtering. This option may be overridden in the module
  *  configuration header file \c conf_extint.h.
  */
-#  define EXTINT_CLOCK_SOURCE GCLK_GENERATOR_0
+#  define EXTINT_CLOCK_SOURCE GCLK_GENERATOR_3
 #endif
 
 /**

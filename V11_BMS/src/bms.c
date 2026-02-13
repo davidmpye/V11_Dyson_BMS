@@ -874,10 +874,13 @@ static void bms_handle_charger_connected_not_charging(void)
   {
     if(prot_get_sleep_flag() == true)
     {
+      serial_debug_send_message("BMS_STANDBY\r\n");
       // enable callbacks, need to wakeup the mcu
       extint_chan_enable_callback(9, EXTINT_CALLBACK_TYPE_DETECT);  // MODE_BUTTON            EXTINT 9 - PA09
       extint_chan_enable_callback(4, EXTINT_CALLBACK_TYPE_DETECT);  // TRIGGER_PRESSED_PIN    EXTINT 4 - PA04
       extint_chan_enable_callback(6, EXTINT_CALLBACK_TYPE_DETECT);  // CHARGER_CONNECTED_PIN  EXTINT 6 - PA06
+      // disable alert callback
+      extint_chan_disable_callback(8, EXTINT_CALLBACK_TYPE_DETECT);
       // goto sleep
       system_set_sleepmode(SYSTEM_SLEEPMODE_STANDBY);
       system_sleep(); // WFI
@@ -886,7 +889,7 @@ static void bms_handle_charger_connected_not_charging(void)
       extint_chan_disable_callback(9, EXTINT_CALLBACK_TYPE_DETECT);  // MODE_BUTTON            EXTINT 9 - PA09
       extint_chan_disable_callback(4, EXTINT_CALLBACK_TYPE_DETECT);  // TRIGGER_PRESSED_PIN    EXTINT 4 - PA04
       extint_chan_disable_callback(6, EXTINT_CALLBACK_TYPE_DETECT);  // CHARGER_CONNECTED_PIN  EXTINT 6 - PA06
-      
+      extint_chan_enable_callback(8, EXTINT_CALLBACK_TYPE_DETECT);
       // reset protocol state machine, wait for handshake 
       prot_reset();
     }
@@ -896,7 +899,7 @@ static void bms_handle_charger_connected_not_charging(void)
       return;
     }
     
-    sw_timer_delay_ms(1000);
+    sw_timer_delay_ms(100);
   }
 }
 
