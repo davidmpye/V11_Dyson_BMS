@@ -1,35 +1,31 @@
 /*
- * sw_timer.h
+ * dio.h
  *
- * Created: 21-Jan-26 16:31:23
- *  Author: Vladislav Gyurov
+ * Created: 13/02/2026 22:13:16
+ *  Author: VG
  */ 
- #ifndef SW_TIMER_H_
-#define SW_TIMER_H_
+
+#ifndef DIO_H_
+#define DIO_H_
 /*-----------------------------------------------------------------------------
   INCLUDE FILES
 ---------------------------------------------------------------------------- */
 #include "asf.h"
-#include "protocol.h"
-#include "bms_adc.h"
-#include "bms.h"
-#include "dio.h"
 
 /*-----------------------------------------------------------------------------
   DEFINITION OF GLOBAL TYPES
 -----------------------------------------------------------------------------*/
-typedef uint32_t sw_timer;
+typedef enum
+{
+  DIO_CHARGER_CONNECTED,
+  DIO_MODE_BUTTON,
+  DIO_TRIGGER_PRESSED,
+  DIO_NUM
+}dio_type_t;
 
 /*-----------------------------------------------------------------------------
   DEFINITION OF GLOBAL MACROS/#DEFINES
 -----------------------------------------------------------------------------*/
-#define SW_TIMER_TICK_MS      1
-#define SW_TIMER_SERVICES()   \
-{ \
-  prot_mainloop(); \
-  bms_interrupt_process(); \
-  dio_mainloop(); \
-}
 
 /*-----------------------------------------------------------------------------
   DECLARATION OF GLOBAL VARIABLES
@@ -42,16 +38,13 @@ typedef uint32_t sw_timer;
 /*-----------------------------------------------------------------------------
   DECLARATION OF GLOBAL FUNCTIONS
 -----------------------------------------------------------------------------*/
-extern void sw_timer_init(void);
-extern void sw_timer_start(sw_timer * sw_timer_ptr);
-extern void sw_timer_stop(sw_timer * sw_timer_ptr);
-extern bool sw_timer_is_started(sw_timer * sw_timer_ptr);
-extern bool sw_timer_is_elapsed(sw_timer * sw_timer_ptr, uint32_t timeout);
-extern sw_timer sw_timer_get_elapsed_time(sw_timer * sw_timer_ptr);
-extern void sw_timer_delay_ms(uint32_t sw_timer_delay_ms);
+extern void dio_init(void);
+extern void dio_mainloop(void);
+extern bool dio_read(dio_type_t dio);
+extern bool dio_debounce(uint8_t value, uint8_t value_old, uint8_t *debounced_value, uint16_t *debounce_counter, uint16_t debounce_counter_preset);
 
 /*-----------------------------------------------------------------------------
   END OF MODULE DEFINITION FOR MULTIPLE INCLUSION
 -----------------------------------------------------------------------------*/
 
-#endif /* SW_TIMER_H_ */
+#endif /* DIO_H_ */

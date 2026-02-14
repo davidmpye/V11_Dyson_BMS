@@ -8,6 +8,8 @@ src\ASF\sam0\drivers\tc\tc.c
 
 src\ASF\sam0\drivers\tc\tc_interrupt.c
 
+src\dio.c
+
 src\sw_timer.c
 
 src\ASF\sam0\drivers\sercom\usart\usart_interrupt.c

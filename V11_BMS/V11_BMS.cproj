@@ -712,6 +712,12 @@
     <Compile Include="src\ASF\sam0\drivers\tc\tc_interrupt.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\dio.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\dio.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\sw_timer.c">
       <SubType>compile</SubType>
     </Compile>

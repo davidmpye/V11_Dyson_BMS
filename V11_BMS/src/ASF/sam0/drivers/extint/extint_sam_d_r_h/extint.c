@@ -45,7 +45,7 @@
  *  EIC edge detection or filtering. This option may be overridden in the module
  *  configuration header file \c conf_extint.h.
  */
-#  define EXTINT_CLOCK_SOURCE GCLK_GENERATOR_3
+#  define EXTINT_CLOCK_SOURCE GCLK_GENERATOR_0
 #endif
 
 /**
@@ -65,9 +65,6 @@ struct _extint_module _extint_dev;
       (EXTINT_DETECT_RISING == (detection_criteria)) ? true : (\
       (EXTINT_DETECT_FALLING == (detection_criteria)) ? true : (\
       (EXTINT_DETECT_BOTH == (detection_criteria)) ? true : false))))
-
-static void _extint_enable(void);
-static void _extint_disable(void);
 
 /**
  * \brief Determines if the hardware module(s) are currently synchronizing to the bus.

@@ -15,6 +15,7 @@
 #include "crc.h"
 #include "sw_timer.h"
 #include "protocol.h"
+#include "dio.h"
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL VARIABLES
@@ -104,6 +105,8 @@ static void    bms_handle_charger_connected(void);
 static void    bms_handle_charger_connected_not_charging(void);
 static void    bms_handle_charging(void);
 static void    bms_handle_charger_unplugged(void);
+static void    bms_enter_standby(void);
+static void    bms_leave_standby(void);
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF GLOBAL FUNCTIONS
@@ -122,6 +125,7 @@ void bms_init(void)
 
   //Set up the pins
   pins_init();
+  dio_init();
   
   bms_adc_init();
   //BQ7693 init
@@ -340,6 +344,7 @@ void bms_mainloop(void)
       break;
     }
 
+    dio_mainloop();
     prot_mainloop();
     bms_interrupt_process();
   }
@@ -432,12 +437,13 @@ static void interrupts_init(void)
   struct extint_chan_conf config_mode_pin;
   extint_chan_get_config_defaults(&config_mode_pin);
   
-  config_mode_pin.wake_if_sleeping  = true;
-  config_mode_pin.gpio_pin           = PIN_PA09A_EIC_EXTINT9;
-  config_mode_pin.gpio_pin_mux       = MUX_PA09A_EIC_EXTINT9;
-  config_mode_pin.gpio_pin_pull      = EXTINT_PULL_NONE;
-  config_mode_pin.detection_criteria = EXTINT_DETECT_RISING;
-  
+  config_mode_pin.wake_if_sleeping    = true;
+  config_mode_pin.filter_input_signal = true;
+  config_mode_pin.gpio_pin            = PIN_PA09A_EIC_EXTINT9;
+  config_mode_pin.gpio_pin_mux        = MUX_PA09A_EIC_EXTINT9;
+  config_mode_pin.gpio_pin_pull       = EXTINT_PULL_NONE;
+  config_mode_pin.detection_criteria  = EXTINT_DETECT_RISING;
+
   extint_chan_set_config(9, &config_mode_pin);
   extint_register_callback(bms_wakeup_interrupt_callback, 9, EXTINT_CALLBACK_TYPE_DETECT);
   extint_chan_disable_callback(9, EXTINT_CALLBACK_TYPE_DETECT);
@@ -448,11 +454,12 @@ static void interrupts_init(void)
   struct extint_chan_conf config_trigger_pin;
   extint_chan_get_config_defaults(&config_trigger_pin);
 
-  config_trigger_pin.wake_if_sleeping   = true;
-  config_trigger_pin.gpio_pin           = PIN_PA04A_EIC_EXTINT4;
-  config_trigger_pin.gpio_pin_mux       = MUX_PA04A_EIC_EXTINT4;
-  config_trigger_pin.gpio_pin_pull      = EXTINT_PULL_NONE;
-  config_trigger_pin.detection_criteria = EXTINT_DETECT_RISING;
+  config_trigger_pin.wake_if_sleeping    = true;
+  config_trigger_pin.filter_input_signal = true;
+  config_trigger_pin.gpio_pin            = PIN_PA04A_EIC_EXTINT4;
+  config_trigger_pin.gpio_pin_mux        = MUX_PA04A_EIC_EXTINT4;
+  config_trigger_pin.gpio_pin_pull       = EXTINT_PULL_NONE;
+  config_trigger_pin.detection_criteria  = EXTINT_DETECT_RISING;
 
   extint_chan_set_config(4, &config_trigger_pin);
   extint_register_callback(bms_wakeup_interrupt_callback, 4, EXTINT_CALLBACK_TYPE_DETECT);
@@ -464,11 +471,12 @@ static void interrupts_init(void)
   struct extint_chan_conf config_charger_pin;
   extint_chan_get_config_defaults(&config_charger_pin);
   
-  config_charger_pin.wake_if_sleeping   = true;
-  config_charger_pin.gpio_pin           = PIN_PA06A_EIC_EXTINT6;
-  config_charger_pin.gpio_pin_mux       = MUX_PA06A_EIC_EXTINT6;
-  config_charger_pin.gpio_pin_pull      = EXTINT_PULL_NONE;
-  config_charger_pin.detection_criteria = EXTINT_DETECT_BOTH;
+  config_charger_pin.wake_if_sleeping    = true;
+  config_charger_pin.filter_input_signal = true;
+  config_charger_pin.gpio_pin            = PIN_PA06A_EIC_EXTINT6;
+  config_charger_pin.gpio_pin_mux        = MUX_PA06A_EIC_EXTINT6;
+  config_charger_pin.gpio_pin_pull       = EXTINT_PULL_NONE;
+  config_charger_pin.detection_criteria  = EXTINT_DETECT_BOTH;
   
   extint_chan_set_config(6, &config_charger_pin);
   extint_register_callback(bms_wakeup_interrupt_callback, 6, EXTINT_CALLBACK_TYPE_DETECT);
@@ -674,20 +682,16 @@ static void bms_handle_idle(void)
       sleep_time = (20 * 1000ul); // 20 sec
     }
 
-    if (port_pin_get_input_level(CHARGER_CONNECTED_PIN) == true)
+    if (dio_read(DIO_CHARGER_CONNECTED) == true)
     {
       bms_state = BMS_CHARGER_CONNECTED;
       return;
     }
-    else if (port_pin_get_input_level(TRIGGER_PRESSED_PIN) == true)
+    else if (dio_read(DIO_TRIGGER_PRESSED) == true)
     {
       leds_blink_leds(10);
-
-      if (port_pin_get_input_level(TRIGGER_PRESSED_PIN) == true)
-      {
-        bms_state = BMS_TRIGGER_PULLED;
-        return;
-      }
+      bms_state = BMS_TRIGGER_PULLED;
+      return;
     }
     else if(force_sleep == true)
     {
@@ -768,7 +772,7 @@ static void bms_handle_discharging(void)
 
   while (1)
   {
-    if (!port_pin_get_input_level(TRIGGER_PRESSED_PIN)) 
+    if (!dio_read(DIO_TRIGGER_PRESSED)) 
     {
       prot_set_trigger(false);
       sw_timer_delay_ms(300);
@@ -837,7 +841,7 @@ static void bms_handle_fault(void)
 			sw_timer_delay_ms(2000);
 		}
 	} 
-	while (port_pin_get_input_level(TRIGGER_PRESSED_PIN) || port_pin_get_input_level(CHARGER_CONNECTED_PIN));
+	while (dio_read(DIO_TRIGGER_PRESSED) || dio_read(DIO_CHARGER_CONNECTED));
 		
 	//Return to idle
 	bms_state = BMS_IDLE;	
@@ -874,31 +878,22 @@ static void bms_handle_charger_connected_not_charging(void)
   {
     if(prot_get_sleep_flag() == true)
     {
+      bms_enter_standby();
       serial_debug_send_message("BMS_STANDBY\r\n");
-      // enable callbacks, need to wakeup the mcu
-      extint_chan_enable_callback(9, EXTINT_CALLBACK_TYPE_DETECT);  // MODE_BUTTON            EXTINT 9 - PA09
-      extint_chan_enable_callback(4, EXTINT_CALLBACK_TYPE_DETECT);  // TRIGGER_PRESSED_PIN    EXTINT 4 - PA04
-      extint_chan_enable_callback(6, EXTINT_CALLBACK_TYPE_DETECT);  // CHARGER_CONNECTED_PIN  EXTINT 6 - PA06
-      // disable alert callback
-      extint_chan_disable_callback(8, EXTINT_CALLBACK_TYPE_DETECT);
       // goto sleep
       system_set_sleepmode(SYSTEM_SLEEPMODE_STANDBY);
       system_sleep(); // WFI
 
-      // return from sleep, disable external interrupts
-      extint_chan_disable_callback(9, EXTINT_CALLBACK_TYPE_DETECT);  // MODE_BUTTON            EXTINT 9 - PA09
-      extint_chan_disable_callback(4, EXTINT_CALLBACK_TYPE_DETECT);  // TRIGGER_PRESSED_PIN    EXTINT 4 - PA04
-      extint_chan_disable_callback(6, EXTINT_CALLBACK_TYPE_DETECT);  // CHARGER_CONNECTED_PIN  EXTINT 6 - PA06
-      extint_chan_enable_callback(8, EXTINT_CALLBACK_TYPE_DETECT);
+      bms_leave_standby();
+
       // reset protocol state machine, wait for handshake 
       prot_reset();
     }
-    else if (!port_pin_get_input_level(CHARGER_CONNECTED_PIN))
+    else if (!dio_read(DIO_CHARGER_CONNECTED))
     {
       bms_state = BMS_IDLE;
       return;
     }
-    
     sw_timer_delay_ms(100);
   }
 }
@@ -953,7 +948,7 @@ static void bms_handle_charging(void)
       return;
     }
     
-    if ( !port_pin_get_input_level(CHARGER_CONNECTED_PIN))
+    if ( !dio_read(DIO_CHARGER_CONNECTED))
     {
       //Charger unplugged.
       //Turn off charging
@@ -981,7 +976,7 @@ static void bms_handle_charging(void)
       {
         sw_timer_delay_ms(1000);
         //If it has, abandon the charge process and return to main loop
-        if (!port_pin_get_input_level(CHARGER_CONNECTED_PIN)) 
+        if (!dio_read(DIO_CHARGER_CONNECTED)) 
         {
           //Charger's been unplugged.
           leds_off();
@@ -1067,6 +1062,62 @@ static void bms_handle_charger_unplugged(void)
 #endif
 
   bms_state = BMS_IDLE;
+}
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static void bms_enter_standby(void)
+{
+  struct system_gclk_chan_config gclk_chan_conf;
+
+  /* 1) Stop EIC while changing its clock */
+  _extint_disable();
+  /* 2) Disable the generic clock channel feeding EIC */
+  system_gclk_chan_disable(EIC_GCLK_ID);
+  /* 3) Route a new generator to EIC */
+  system_gclk_chan_get_config_defaults(&gclk_chan_conf);
+  gclk_chan_conf.source_generator = GCLK_GENERATOR_3; // low power 32khz oscillator
+  system_gclk_chan_set_config(EIC_GCLK_ID, &gclk_chan_conf);
+  /* 4) Enable it again */
+  system_gclk_chan_enable(EIC_GCLK_ID);
+  /* 5) Start EIC again */
+  _extint_enable();
+
+  // enable callbacks, need to wakeup the mcu
+  extint_chan_enable_callback(9, EXTINT_CALLBACK_TYPE_DETECT);  // MODE_BUTTON            EXTINT 9 - PA09
+  extint_chan_enable_callback(4, EXTINT_CALLBACK_TYPE_DETECT);  // TRIGGER_PRESSED_PIN    EXTINT 4 - PA04
+  extint_chan_enable_callback(6, EXTINT_CALLBACK_TYPE_DETECT);  // CHARGER_CONNECTED_PIN  EXTINT 6 - PA06
+  // disable alert callback
+  extint_chan_disable_callback(8, EXTINT_CALLBACK_TYPE_DETECT);
+}
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static void bms_leave_standby(void)
+{
+  struct system_gclk_chan_config gclk_chan_conf;
+
+  /* 1) Stop EIC while changing its clock */
+  _extint_disable();
+  /* 2) Disable the generic clock channel feeding EIC */
+  system_gclk_chan_disable(EIC_GCLK_ID);
+  /* 3) Route a new generator to EIC */
+  system_gclk_chan_get_config_defaults(&gclk_chan_conf);
+  gclk_chan_conf.source_generator = GCLK_GENERATOR_0;
+  system_gclk_chan_set_config(EIC_GCLK_ID, &gclk_chan_conf);
+  /* 4) Enable it again */
+  system_gclk_chan_enable(EIC_GCLK_ID);
+  /* 5) Start EIC again */
+  _extint_enable();
+
+  // return from sleep, disable external interrupts
+  extint_chan_disable_callback(9, EXTINT_CALLBACK_TYPE_DETECT);  // MODE_BUTTON            EXTINT 9 - PA09
+  extint_chan_disable_callback(4, EXTINT_CALLBACK_TYPE_DETECT);  // TRIGGER_PRESSED_PIN    EXTINT 4 - PA04
+  extint_chan_disable_callback(6, EXTINT_CALLBACK_TYPE_DETECT);  // CHARGER_CONNECTED_PIN  EXTINT 6 - PA06
+  // enable alert callback
+  extint_chan_enable_callback(8, EXTINT_CALLBACK_TYPE_DETECT);
 }
 
 /*-----------------------------------------------------------------------------

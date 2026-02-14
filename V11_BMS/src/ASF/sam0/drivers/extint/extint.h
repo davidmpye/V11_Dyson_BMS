@@ -562,6 +562,8 @@ static inline void extint_nmi_clear_detected(
 }
 
 /** @} */
+extern void _extint_enable(void);
+extern void _extint_disable(void);
 
 #ifdef __cplusplus
 }

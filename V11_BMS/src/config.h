@@ -16,7 +16,6 @@
 //Battery charge/discharge indicators
 
 //- seems to go to Q3 on the charger inlet side of things, push it high to accept a charge
-//#define ENABLE_CHARGE_PIN PIN_PA02 // For V10
 #define ENABLE_CHARGE_PIN PIN_PA01 // For V15 & V11 charging confirmed
 
 //PA28 appears to be ALERT pin from the BQ7693

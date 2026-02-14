@@ -117,7 +117,6 @@ static uint8_t tx_msg_idx          = 0;
 static uint8_t tx_length           = 0;
 static rx_states rx_state          = PROT_RX_INIT;
 static bool sleep_flag             = false;
-static bool charger_connected_state_old = false;
 static bool vacuum_connected       = false;
 
 /*-----------------------------------------------------------------------------
@@ -388,11 +387,9 @@ void prot_mainloop(void)
     //------------------------------------------------------------------------
     case PROT_SLEEP:
     {
-      bool charger_connected = port_pin_get_input_level(CHARGER_CONNECTED_PIN);
-
-      if(    (port_pin_get_input_level(MODE_BUTTON)         == true)
-          || (port_pin_get_input_level(TRIGGER_PRESSED_PIN) == true)
-          || (charger_connected != charger_connected_state_old))
+      if(    (dio_read(DIO_MODE_BUTTON)       == true)
+          || (dio_read(DIO_TRIGGER_PRESSED)   == true)
+          || (dio_read(DIO_CHARGER_CONNECTED) == false))
       {
         prot_state = PROT_INIT;
       }
@@ -579,7 +576,7 @@ static prot_states prot_analyze_frame(prot_states current_state)
 //- **************************************************************************
 static void prot_assemble_trigger_frame(void)
 {
-  bool charger_connected = port_pin_get_input_level(CHARGER_CONNECTED_PIN);
+  bool charger_connected = dio_read(DIO_CHARGER_CONNECTED);
 
   if(charger_connected == false && prot_trigger_state != false)
   {
@@ -608,7 +605,7 @@ static void prot_assemble_data_frame(void)
   uint8_t serial_buffer_tmp[sizeof(msg_bms_data_res)] = {0};
   uint16_t soc_percent_x100  = bms_get_soc_x100();  // state of charge in percent * 100 
   uint16_t runtime_sec       = bms_get_runtime_seconds();
-  bool     charger_connected = port_pin_get_input_level(CHARGER_CONNECTED_PIN);
+  bool     charger_connected = dio_read(DIO_CHARGER_CONNECTED);
   uint8_t  rolling_counter;
   uint32_t crc;
 
@@ -718,7 +715,6 @@ static void prot_mode_sleep_callback(void)
   delay_ms(300);
   prot_state = PROT_SLEEP;
   // store charger connected state 
-  charger_connected_state_old = port_pin_get_input_level(CHARGER_CONNECTED_PIN);
   PROT_PRINT("SLEEP\r\n");
 }
 
