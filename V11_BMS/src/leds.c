@@ -94,19 +94,19 @@ static const leds_cfg_t leds_cfg[] =
 //- **************************************************************************
 void leds_sequence(void)
 {
-  for(int j = 0; j < 6; j++)
-  {
-    for (int i = 0; i < (uint8_t)LEDS_NUM; ++i)
-    {
-      leds_set_led_duty((leds_t)i, 100);
-      sw_timer_delay_ms(LED_SEQ_TIME);
-    }
+  uint8_t duty;
+  uint8_t duty_lim;
 
-    for (int i = ((uint8_t)LEDS_NUM) - 1; i >= 0; --i)
-    {
-      leds_set_led_duty((leds_t)i, 0);
-      sw_timer_delay_ms(LED_SEQ_TIME);
-    }
+  for(int j = 0; j < 400; j++)
+  {
+    duty = (j + 0) % 200;
+    duty_lim = (duty > 100) ? (200 - duty) : duty;
+    duty_lim = (duty_lim < 20) ? 0 : (duty_lim);
+
+    leds_set_led_duty(LEDS_LED_ERR_RIGHT, duty_lim);
+    leds_set_led_duty(LEDS_LED_ERR_LEFT,  duty_lim);
+
+    sw_timer_delay_ms(1);
   }
 }
 
