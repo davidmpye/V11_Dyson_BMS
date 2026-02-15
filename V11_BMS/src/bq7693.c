@@ -49,16 +49,17 @@ static inline void pin_set_peripheral_function(uint32_t pinmux)
 
 void bq7693_i2c_init()
  {  
-  //Enable I2C on SERCOM1 - pads PA16 + PA17
-  //pin_set_peripheral_function(PINMUX_PA16C_SERCOM1_PAD0);
-  //pin_set_peripheral_function(PINMUX_PA17C_SERCOM1_PAD1);
-  
-  //I2C peripheral init (from ASF example)
+  //I2C peripheral init
   struct i2c_master_config config_i2c_master;
+
   i2c_master_get_config_defaults(&config_i2c_master);
-  config_i2c_master.buffer_timeout = BQ7693_TIMEOUT;
-  config_i2c_master.pinmux_pad0 = PINMUX_PA16C_SERCOM1_PAD0;
-  config_i2c_master.pinmux_pad1 = PINMUX_PA17C_SERCOM1_PAD1;
+  config_i2c_master.buffer_timeout            = BQ7693_TIMEOUT;
+  config_i2c_master.unknown_bus_state_timeout = BQ7693_TIMEOUT;
+  config_i2c_master.inactive_timeout          = BQ7693_TIMEOUT;
+  config_i2c_master.pinmux_pad0               = PINMUX_PA16C_SERCOM1_PAD0;
+  config_i2c_master.pinmux_pad1               = PINMUX_PA17C_SERCOM1_PAD1;
+  config_i2c_master.scl_low_timeout           = true;
+
   i2c_master_init(&i2c_master_instance, SERCOM1, &config_i2c_master);
   i2c_master_enable(&i2c_master_instance);
 }
