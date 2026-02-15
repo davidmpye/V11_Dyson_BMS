@@ -2,7 +2,8 @@
  * bms_wdt.c
  *
  * Created: 14/02/2026 15:06:58
- *  Author: VG
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
  /*-----------------------------------------------------------------------------
     INCLUDE FILES

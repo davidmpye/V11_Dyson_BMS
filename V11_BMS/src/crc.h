@@ -2,7 +2,8 @@
  * crc.h
  *
  * Created: 21-Jan-26 12:27:30
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
 
 

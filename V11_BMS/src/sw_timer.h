@@ -2,7 +2,8 @@
  * sw_timer.h
  *
  * Created: 21-Jan-26 16:31:23
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
  #ifndef SW_TIMER_H_
 #define SW_TIMER_H_

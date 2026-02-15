@@ -2,7 +2,8 @@
  * bms_adc.c
  *
  * Created: 21-Jan-26 10:09:58
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
  /*-----------------------------------------------------------------------------
     INCLUDE FILES

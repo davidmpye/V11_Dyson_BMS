@@ -2,7 +2,8 @@
  * dio.c
  *
  * Created: 13/02/2026 22:13:02
- *  Author: VG
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
  /*-----------------------------------------------------------------------------
     INCLUDE FILES

@@ -2,7 +2,8 @@
  * bms_wdt.h
  *
  * Created: 14/02/2026 15:06:44
- *  Author: VG
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
  
  #ifndef BMS_WDT_H_

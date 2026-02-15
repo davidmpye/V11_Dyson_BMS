@@ -2,7 +2,8 @@
  * sw_timer.c
  *
  * Created: 21-Jan-26 16:31:01
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
  /*-----------------------------------------------------------------------------
     INCLUDE FILES

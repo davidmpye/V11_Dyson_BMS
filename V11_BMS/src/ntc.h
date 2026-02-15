@@ -2,9 +2,9 @@
  * ntc.h
  *
  * Created: 21-Jan-26 10:03:15
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
-
 
 #ifndef NTC_H_
 #define NTC_H_

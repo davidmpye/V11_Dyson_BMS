@@ -2,7 +2,8 @@
  * bms_adc.h
  *
  * Created: 21-Jan-26 10:10:14
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
 
 

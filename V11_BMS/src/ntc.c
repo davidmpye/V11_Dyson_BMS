@@ -2,7 +2,8 @@
  * ntc.c
  *
  * Created: 21-Jan-26 10:02:57
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
  /*-----------------------------------------------------------------------------
     INCLUDE FILES

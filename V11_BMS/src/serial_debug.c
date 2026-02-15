@@ -1,9 +1,9 @@
 /*
  * serial_debug.c
  *
- *  Author:  David Pye
+ * Author :  David Pye
  *  Contact: davidmpye@gmail.com
- *  Licence: GNU GPL v3 or later
+ *  License: GNU GPL v3 or later
  */ 
 
 /*-----------------------------------------------------------------------------

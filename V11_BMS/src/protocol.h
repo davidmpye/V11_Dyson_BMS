@@ -2,7 +2,8 @@
  * protocol.h
  *
  * Created: 21-Jan-26 10:36:36
- *  Author: Vladislav Gyurov
+ * Author : Vladislav Gyurov
+ * License: GNU GPL v3 or later
  */ 
 
 
