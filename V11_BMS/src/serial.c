@@ -91,14 +91,14 @@ void serial_init()
   usart_enable_callback(&usart_instance, USART_CALLBACK_BUFFER_RECEIVED);
 
   usart_enable(&usart_instance);
-  //Start read job - the next one is kicked off by the above callback  usart_read_buffer_job(&usart_instance, &rx_char, sizeof(rx_char));  usart_disable_transceiver(&usart_instance, USART_TRANSCEIVER_TX);  usart_write_buffer_wait(&usart_instance, 0, 1);  NVIC_SetPriority(SERCOM2_IRQn, 0);}
+  //Start read job - the next one is kicked off by the above callback  usart_read_buffer_job(&usart_instance, &rx_char, sizeof(rx_char));  usart_disable_transceiver(&usart_instance, USART_TRANSCEIVER_TX);  system_interrupt_set_priority(_sercom_get_interrupt_vector(usart_instance.hw), SYSTEM_INTERRUPT_PRIORITY_LEVEL_0);}
 
 //- **************************************************************************
 //! \brief
 //- **************************************************************************
 void serial_send(uint8_t* buff_ptr, uint8_t buff_size)
 {
-  NVIC_DisableIRQ(SERCOM2_IRQn);
+  system_interrupt_disable(_sercom_get_interrupt_vector(usart_instance.hw));
   usart_disable_callback(&usart_instance, USART_CALLBACK_BUFFER_RECEIVED);
   usart_disable_transceiver(&usart_instance, USART_TRANSCEIVER_RX);
   usart_enable_transceiver(&usart_instance, USART_TRANSCEIVER_TX);
@@ -108,7 +108,7 @@ void serial_send(uint8_t* buff_ptr, uint8_t buff_size)
   usart_disable_transceiver(&usart_instance, USART_TRANSCEIVER_TX);
   usart_enable_transceiver(&usart_instance, USART_TRANSCEIVER_RX);
   usart_enable_callback(&usart_instance, USART_CALLBACK_BUFFER_RECEIVED);
-  NVIC_EnableIRQ(SERCOM2_IRQn);
+  system_interrupt_enable(_sercom_get_interrupt_vector(usart_instance.hw));
 }
 
 /*-----------------------------------------------------------------------------
@@ -119,8 +119,7 @@ void serial_send(uint8_t* buff_ptr, uint8_t buff_size)
 //- **************************************************************************
 static void usart_read_callback(struct usart_module *const usart_module)
 {
-  prot_serial_rx_callback(rx_char);    //Queue up next read.*/  usart_read_buffer_job(&usart_instance, &rx_char, sizeof(rx_char));}
-
+  prot_serial_rx_callback(rx_char);  //Queue up next read  usart_read_buffer_job(&usart_instance, &rx_char, sizeof(rx_char));}
 /*-----------------------------------------------------------------------------
     END OF MODULE
 -----------------------------------------------------------------------------*/
