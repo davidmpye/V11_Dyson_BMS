@@ -67,6 +67,8 @@ static sw_timer bms_timer = 0;
 static int16_t  pack_temperature = 0;
 static bool process_bms_interrupt = false;
 
+extern volatile struct eeprom_data eeprom_data;
+
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL CONSTANTS
 -----------------------------------------------------------------------------*/

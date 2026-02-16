@@ -47,6 +47,7 @@ static char debug_buffer[80];
 #if defined(SERIAL_DEBUG) || defined(PROT_DEBUG_PRINT)
 char *debug_msg_buffer = debug_buffer;
 #endif
+extern volatile struct eeprom_data eeprom_data;
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL CONSTANTS

@@ -26,7 +26,7 @@ struct eeprom_data
 {
   int32_t total_pack_capacity;    //micro-amp-hours
   int32_t current_charge_level;   //micro-amp-hours
-} eeprom_data;
+} ;
 
 int eeprom_init(void);
 int eeprom_read(void);
