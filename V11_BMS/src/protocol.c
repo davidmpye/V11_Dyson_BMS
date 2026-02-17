@@ -36,6 +36,7 @@
 #define BMS_MSG_BAT_RUNTIME_HI_IDX          38
 #define BMS_MSG_SOC2_LO_IDX                 47
 #define BMS_MSG_SOC2_HI_IDX                 48
+#define BMS_MSG_TRIG_COMPLEX_IDX            20
 
 #define MSG_DELIM_CHAR                      0x12
 #define MSG_DELIM_SIZE                      1
@@ -148,6 +149,8 @@ static void prot_assemble_data_frame(void);
 static uint8_t prot_stuff_frame(uint8_t * dest, const uint8_t * src, size_t dest_len, size_t src_len);
 static void prot_mode_handshake_callback(void);
 static void prot_mode_sleep_callback(void);
+static void prot_assemble_trig_res_complex(void);
+
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL CONSTANTS
@@ -180,6 +183,11 @@ static const uint8_t msg_bms_trig_on_res_ok[]   = {0x12, 0x1B, 0x00, 0x5C, 0x01,
 // vac not running
 static const uint8_t msg_bms_trig_off_res_ok[]  = {0x12, 0x1B, 0x00, 0x5C, 0x01, 0xC0, 0x03, 0x01, 0x01, 0x08, 0x10, 0x11, 0x01, 0x82, 0x98, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x81, 0x01, 0x00, 0x00, 0x71, 0x76, 0x13, 0x64, 0x12};
 //static const uint8_t msg_bms_trig_off_res_nok[] = {0x12, 0x1B, 0x00, 0x5C, 0x01, 0xC0, 0x03, 0x01, 0x01, 0x08, 0x10, 0xDB, 0xDE, 0x01, 0x82, 0x98, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x81, 0x01, 0x00, 0x00, 0xF5, 0x2D, 0x89, 0x37, 0x12};
+
+//This comes from V11s with screw-in battery - byte 20 indicates trigger status - 0x00 - not pulled, 0x01 trigger pulled
+static const uint8_t msg_vac_trig_req_complex[] = {0x12, 0x2B, 0x00, 0x63, 0x01, 0xC0, 0x03, 0x02, 0x0C, 0x00, 0x08, 0x02, 0x10, 0x00, 0x11, 0x02, 0x10, 0x10, 0x80, 0x02, 0x10, 0x01, 0x80, 0x02, 0x10, 0x05, 0x80, 0x02, 0x10, 0x06, 0x80, 0x02, 0x10, 0x08, 0x80, 0x02, 0x10, 0x08, 0x81, 0x02, 0x10, 0x02, 0x80, 0x0F, 0x7D, 0x7D, 0xA9, 0x12};
+//As per the data req/res, byte 9 is a rolling counter and must be copied from 0x2B
+static const uint8_t msg_bms_trig_res_complex[] = {0x12, 0x47, 0x00, 0x82, 0x00, 0xC0, 0x02, 0x03, 0x0C, 0x01, 0x08, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x11, 0x01, 0x00, 0x01, 0x01, 0x10, 0x10, 0x80, 0x01, 0x00, 0x02, 0x01, 0x10, 0x01, 0x80, 0x01, 0x00, 0x00, 0x01, 0x10, 0x05, 0x80, 0x01, 0x00, 0x00, 0x01, 0x10, 0x06, 0x80, 0x01, 0x00, 0x00, 0x01, 0x10, 0x08, 0x80, 0x01, 0x00, 0x00, 0x01, 0x10, 0x08, 0x81, 0x02, 0x00, 0x00, 0x00, 0x01, 0x10, 0x02, 0x80, 0x01, 0x00, 0x00, 0xF9, 0x21, 0x46, 0xDE, 0x12};
 
 static const uint8_t msg_vac_trig_req_sleep[]  = {0x12, 0x16, 0x00, 0xAE, 0x00, 0xC0, 0x01, 0x03, 0x01, 0x07, 0x10, 0x11, 0x00, 0x82, 0x00, 0x00, 0x00, 0x00, 0x02, 0x10, 0x00, 0x81, 0x48, 0x54, 0x1C, 0xBC, 0x12};
 static const uint8_t msg_bms_trig_res_sleep[]  = {0x12, 0x1B, 0x00, 0x5C, 0x01, 0xC0, 0x03, 0x01, 0x01, 0x08, 0x10, 0x11, 0x01, 0x82, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x81, 0x01, 0x00, 0x00, 0xC0, 0x30, 0xAD, 0x8F, 0x12};
@@ -222,6 +230,20 @@ static const prot_cfg_t prot_cfg[] =
     .msg_res_size     = 0,
     .dest_state       = PROT_TX_FRAME,
     .rx_callback      = prot_assemble_trigger_frame,
+    .tx_callback      = NULL,
+#ifdef PROT_DEBUG_PRINT
+    .dump_bytes       = false,
+    .debug_str        = NULL
+#endif
+  },
+  {
+    .msg_req_ptr      = msg_vac_trig_req_complex,
+    .msg_res_ptr      = serial_buffer_tx,
+    .msg_req_cmp_size = 6,
+    .msg_req_size     = sizeof(msg_bms_trig_res_complex),
+    .msg_res_size     = 0,
+    .dest_state       = PROT_TX_FRAME,
+    .rx_callback      = prot_assemble_trig_res_complex,
     .tx_callback      = NULL,
 #ifdef PROT_DEBUG_PRINT
     .dump_bytes       = false,
@@ -643,6 +665,36 @@ static void prot_assemble_data_frame(void)
   {
     prot_state = PROT_WAIT_FRAME; // crc of data frame not match, wait next frame
   }
+}
+
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+static void prot_assemble_trig_res_complex(void)
+{
+    //Fixme - need to verify CRC16 of received frame.
+    uint8_t serial_buffer_tmp[sizeof(msg_bms_data_res)] = {0};
+    uint8_t rolling_counter;
+    uint32_t crc;
+
+    // first copy rolling counter from rx buffer
+    rolling_counter = serial_buffer_rx[BMS_MSG_ROLLING_COUNTER_IDX];
+    // copy data response to serial buffer
+    memcpy(serial_buffer_tmp, msg_bms_trig_res_complex, sizeof(msg_bms_trig_res_complex));
+    // copy back rolling counter to response
+    serial_buffer_tmp[BMS_MSG_ROLLING_COUNTER_IDX] = rolling_counter;
+    //Put the trigger status into the correct location
+    serial_buffer_tmp[BMS_MSG_TRIG_COMPLEX_IDX] = prot_trigger_state ? 0x01 : 0x00;
+    crc = calc_crc32(CRC32_INIT_MSG_C1, &serial_buffer_tmp[1], (sizeof(msg_bms_trig_res_complex) - (sizeof(uint32_t) + MSG_DELIM_SIZE + MSG_DELIM_SIZE)));
+    
+    // fill crc into the message
+    serial_buffer_tmp[(sizeof(msg_bms_data_res) - (sizeof(uint32_t) + MSG_DELIM_SIZE)) + 0] = (uint8_t)((crc >> 0)  & 0x000000FFul);  // lsb first
+    serial_buffer_tmp[(sizeof(msg_bms_data_res) - (sizeof(uint32_t) + MSG_DELIM_SIZE)) + 1] = (uint8_t)((crc >> 8)  & 0x000000FFul);
+    serial_buffer_tmp[(sizeof(msg_bms_data_res) - (sizeof(uint32_t) + MSG_DELIM_SIZE)) + 2] = (uint8_t)((crc >> 16) & 0x000000FFul);
+    serial_buffer_tmp[(sizeof(msg_bms_data_res) - (sizeof(uint32_t) + MSG_DELIM_SIZE)) + 3] = (uint8_t)((crc >> 24) & 0x000000FFul);
+
+    tx_length = prot_stuff_frame(serial_buffer_tx, serial_buffer_tmp, sizeof(serial_buffer_tx), sizeof(msg_bms_data_res));
 }
 
 //- **************************************************************************
