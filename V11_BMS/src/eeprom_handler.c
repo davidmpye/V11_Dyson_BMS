@@ -7,6 +7,7 @@
  */ 
 
 #include "eeprom_handler.h"
+volatile struct eeprom_data eeprom_data;
 
 int eeprom_init(void) 
 {
