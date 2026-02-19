@@ -686,8 +686,8 @@ static void prot_assemble_trig_res_complex(void)
     serial_buffer_tmp[BMS_MSG_ROLLING_COUNTER_IDX] = rolling_counter;
     //Put the trigger status into the correct location
     serial_buffer_tmp[BMS_MSG_TRIG_COMPLEX_IDX] = prot_trigger_state ? 0x01 : 0x00;
-    crc = calc_crc32(CRC32_INIT_MSG_C1, &serial_buffer_tmp[1], (sizeof(msg_bms_trig_res_complex) - (sizeof(uint32_t) + MSG_DELIM_SIZE + MSG_DELIM_SIZE)));
-    
+    //Calculate the specific 32 byte crc for this message (alters based on sequence and protocol type)
+    crc = calc_msg_crc(serial_buffer_tmp, sizeof(msg_bms_trig_res_complex));
     // fill crc into the message
     serial_buffer_tmp[(sizeof(msg_bms_data_res) - (sizeof(uint32_t) + MSG_DELIM_SIZE)) + 0] = (uint8_t)((crc >> 0)  & 0x000000FFul);  // lsb first
     serial_buffer_tmp[(sizeof(msg_bms_data_res) - (sizeof(uint32_t) + MSG_DELIM_SIZE)) + 1] = (uint8_t)((crc >> 8)  & 0x000000FFul);

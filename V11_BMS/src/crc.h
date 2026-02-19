@@ -39,7 +39,9 @@
 -----------------------------------------------------------------------------*/
 extern uint32_t calc_crc32(uint32_t crc_init,  uint8_t * data_ptr, uint16_t len);
 extern uint16_t calc_crc16_C9A7(uint16_t crc_init, uint8_t * data_ptr, uint16_t len);
-
+uint16_t crc16(uint8_t *data, size_t len, uint16_t init);
+uint32_t calc_msg_crc(uint8_t* msg, size_t len);
+uint32_t calc_crc_init(uint8_t seq, uint8_t* matrix_table, uint16_t constant);
 /*-----------------------------------------------------------------------------
   END OF MODULE DEFINITION FOR MULTIPLE INCLUSION
 -----------------------------------------------------------------------------*/

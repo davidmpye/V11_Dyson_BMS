@@ -48,6 +48,15 @@ static const uint32_t c_wCRC32Table[16] =
 static const uint16_t crc16_C9A7_table_lo[] = { 0x0000,0x5B1B,0xB636,0xED2D,0xA74B,0xFC50,0x117D,0x4A66,0x85B1,0xDEAA,0x3387,0x689C,0x22FA,0x79E1,0x94CC,0xCFD7 };
 static const uint16_t crc16_C9A7_table_hi[] = { 0x0000,0xC045,0x4BAD,0x8BE8,0x975A,0x571F,0xDCF7,0x1CB2,0xE593,0x25D6,0xAE3E,0x6E7B,0x72C9,0xB28C,0x3964,0xF921 };
 
+
+//0x63 message crc table
+const uint8_t matrix_0x63_hi[] = { 0x0e, 0x36, 0x12, 0x72, 0x30, 0x6c, 0x0c, 0x68, 0x5e, 0x40, 0x54, 0x24, 0x48, 0x62, 0x6e, 0x06 };
+const uint16_t const_0x63_hi = 0xf993;
+
+const uint8_t matrix_0x63_lo[] = { 0x5c, 0x40, 0x7a, 0x52, 0x24, 0x30, 0x62, 0x44, 0x54, 0x52, 0x24, 0x32, 0x42, 0x20, 0x38, 0x2e };
+const uint16_t const_0x63_lo = 0x98ef;
+
+
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL FUNCTIONS PROTOTYPES
 -----------------------------------------------------------------------------*/
@@ -86,12 +95,57 @@ uint32_t calc_crc32(uint32_t crc_init,  uint8_t * data_ptr, uint16_t len)
 
 //- **************************************************************************
 //! \brief 
-//!         CRC32
-//*!        Poly: 0xc9a7
-//*!        Init: crc_init
-//*!        RefIn: True
-//*!        RefOut: True
-//*!        XorOut: 0x00000000
+//!         Message CRC calculation
+//- **************************************************************************
+uint32_t calc_msg_crc(uint8_t* msg, size_t len) {
+    //Parse the message header
+    uint16_t init_lo, init_hi;
+    uint16_t msg_len = (msg[1] | msg[2]<<8) -1;
+    uint8_t cmd = msg[3];
+    uint8_t seq = msg[8];
+
+    //Generate the correct CRC16 init values based on message type and sequence
+    switch (cmd) {
+        case 0x63:
+            init_hi = calc_crc_init(seq, matrix_0x63_hi, const_0x63_hi);
+            init_lo = calc_crc_init(seq, matrix_0x63_lo, const_0x63_lo);
+            break;
+        default:
+            //Need to flag this as an error
+            break;
+    };
+    //Generate the higher 2 crc bytes. (Ignore the 0x12s)
+    uint16_t crc_hi = crc16(&msg[1], msg_len, init_hi);
+    //Generate the first part of low crc based on message
+    uint16_t crc_lo = crc16(&msg[1], msg_len , init_lo);
+    //Now recalculate the low crc to include the high crc bytes
+    crc_lo = crc16((uint8_t*)&crc_hi, 2, crc_lo);
+    return crc_hi<<16 | crc_lo;
+}
+
+//- **************************************************************************
+//! \brief
+//- **************************************************************************
+uint32_t calc_crc_init(uint8_t seq, uint8_t* matrix_table, uint16_t constant) {
+    //For given matrix_table, sequence and constant, generate the correct CRC init from the message sequence no
+    //Compute CRC16 init from seq byte via GF(2) matrix multiply.
+    //Each row of the 16x8 matrix produces one bit of the 16-bit init
+    uint16_t result = 0x00000000;
+    for (int i=0; i<16; ++i) {
+        bool bit = 0;
+        for (int j=0; j<8; ++j) {
+            bit ^= (matrix_table[i] >> j) & 0x01 & ((seq >> j) & 1);
+        }
+        if (bit) {
+            result |= 0x01 << i;
+        }
+    }
+    return result ^ constant;
+}
+
+
+//- **************************************************************************
+//! \brief 
 //- **************************************************************************
 uint16_t calc_crc16_C9A7(uint16_t crc_init, uint8_t * data_ptr, uint16_t len)
 {
@@ -113,6 +167,28 @@ uint16_t calc_crc16_C9A7(uint16_t crc_init, uint8_t * data_ptr, uint16_t len)
 
   return (crc_u16);
 }
+
+
+//- **************************************************************************
+//! \brief 
+//! Calculate a straightforward CRC16 using the dyson 0xC9A7 poly, using the 
+//! given init value
+//- **************************************************************************
+uint16_t crc16(uint8_t *data, size_t len, uint16_t init) {
+    uint16_t crc = init;
+    //CRC-16 Dyson — poly 0xC9A7 (reflected 0xE593)
+    for (size_t i=0; i<len; ++i) {
+        crc ^= data[i];
+        for (int j=0; j<8; ++j) {
+            if (crc & 0x01) 
+                crc = (crc >> 1) ^ 0xE593;
+            else 
+                crc = crc >> 1;
+        }
+    }
+    return crc & 0xFFFF;    
+}
+
 
 /*-----------------------------------------------------------------------------
     DEFINITION OF LOCAL FUNCTIONS
